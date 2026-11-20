@@ -445,3 +445,54 @@ export async function detectContext(
   }
   return undefined;
 }
+
+export interface ActiveLoadedModel {
+  modelName: string;
+  loadedContextLength?: number;
+  maxContextLength?: number;
+}
+
+/**
+ * Detects any model currently loaded in memory on a local server (LM Studio or Ollama).
+ * Returns null if the server is down or no model is loaded.
+ */
+export async function detectActiveLoadedModel(
+  spec: Pick<ModelSpec, 'kind' | 'baseUrl'>,
+  fetchFn: typeof fetch = fetch,
+): Promise<ActiveLoadedModel | null> {
+  const root = (openAICompatibleBaseUrl(spec.kind, spec.baseUrl) ?? '').replace(/\/v1$/, '');
+  const json = async (url: string, init?: RequestInit) => {
+    try {
+      const response = await fetchFn(url, init);
+      return response.ok ? ((await response.json()) as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  };
+  const positive = (n: unknown) => (typeof n === 'number' && n > 0 ? n : undefined);
+  if (spec.kind === 'lmstudio') {
+    const models = await json(`${root}/api/v0/models`);
+    if (!models || !Array.isArray(models.data)) return null;
+    const loaded = (models.data as Array<{ id?: string; state?: string; loaded_context_length?: number; max_context_length?: number }>).find(
+      m => m.state === 'loaded' && !!m.id,
+    );
+    if (!loaded || !loaded.id) return null;
+    return {
+      modelName: loaded.id,
+      loadedContextLength: positive(loaded.loaded_context_length),
+      maxContextLength: positive(loaded.max_context_length),
+    };
+  }
+  if (spec.kind === 'ollama') {
+    const ps = await json(`${root}/api/ps`);
+    if (!ps || !Array.isArray(ps.models)) return null;
+    const loaded = (ps.models as Array<{ name?: string; model?: string; context_length?: number }>)[0];
+    const name = loaded?.name || loaded?.model;
+    if (!name) return null;
+    return {
+      modelName: name,
+      loadedContextLength: positive(loaded.context_length),
+    };
+  }
+  return null;
+}

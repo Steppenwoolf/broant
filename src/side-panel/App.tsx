@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncE
 import { capabilityOf, DEFAULT_SETTINGS, keysStorage, providersStorage, settingsStorage } from '@src/store/settings';
 import type { ProviderConfig } from '@src/store/settings';
 import type { LivePair, ModelRef, PermissionMode } from '@src/store/types';
-import { makePair } from '@src/llm/profiles';
+import { detectActiveLoadedModel, makePair } from '@src/llm';
 import type { ReasoningEffort } from '@src/llm/catalogue';
 import { useStorage } from '@src/ui/hooks';
 import { setLanguage, t, useLanguage } from '@src/ui/i18n';
@@ -197,6 +197,33 @@ export function App() {
       ),
     [providers],
   );
+
+  const [activeLoadedModelName, setActiveLoadedModelName] = useState<string | null>(null);
+  useEffect(() => {
+    const localProvider = providers.find(p => p.kind === 'lmstudio' || p.kind === 'ollama');
+    if (!localProvider) {
+      setActiveLoadedModelName(null);
+      return;
+    }
+    let cancelled = false;
+    const checkLoaded = () => {
+      detectActiveLoadedModel({ kind: localProvider.kind, baseUrl: localProvider.baseUrl })
+        .then(active => {
+          if (!cancelled) setActiveLoadedModelName(active?.modelName ?? null);
+        })
+        .catch(() => {
+          if (!cancelled) setActiveLoadedModelName(null);
+        });
+    };
+    checkLoaded();
+    const timer = setInterval(checkLoaded, 5_000);
+    window.addEventListener('focus', checkLoaded);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener('focus', checkLoaded);
+    };
+  }, [providers]);
 
   const conversation = state.conversation;
   const mode: PermissionMode = conversation?.mode ?? draftMode ?? settings.defaultMode;
@@ -593,6 +620,9 @@ export function App() {
         reasoning={reasoning}
         onModel={next => choose({ model: next, reasoning })}
         onReasoning={next => model && choose({ model, reasoning: next })}
+        preferLoaded={settings.preferLoadedModel}
+        onPreferLoaded={checked => void settingsStorage.set(s => ({ ...s, preferLoadedModel: checked }))}
+        activeLoadedModelName={activeLoadedModelName}
       />
     </div>
   );

@@ -42,6 +42,9 @@ export function ModelMenu({
   running,
   onModel,
   onReasoning,
+  preferLoaded,
+  onPreferLoaded,
+  activeLoadedModelName,
 }: {
   models: ModelChoice[];
   model: ModelRef | null;
@@ -50,6 +53,9 @@ export function ModelMenu({
   running: boolean;
   onModel: (model: ModelRef) => void;
   onReasoning: (reasoning: ReasoningEffort) => void;
+  preferLoaded?: boolean;
+  onPreferLoaded?: (prefer: boolean) => void;
+  activeLoadedModelName?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -133,6 +139,24 @@ export function ModelMenu({
             }
           }}
           className="absolute bottom-11 left-2 z-10 flex w-64 max-w-[calc(100%-1rem)] flex-col rounded-xl border border-nb-border bg-nb-bg p-1 text-xs shadow-pop">
+          {onPreferLoaded !== undefined ? (
+            <label
+              className="flex items-center justify-between gap-2 border-b border-nb-border px-3 py-2 text-xs text-nb-fg cursor-pointer select-none hover:bg-nb-surface rounded-t-lg"
+              title={t('composer.preferLoadedTooltip')}>
+              <span className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={preferLoaded}
+                  onChange={e => onPreferLoaded(e.target.checked)}
+                  className="size-3.5 rounded border-nb-border text-nb-accent focus:ring-nb-accent/40 accent-nb-accent cursor-pointer"
+                />
+                <span>{t('composer.preferLoaded')}</span>
+              </span>
+              {activeLoadedModelName ? (
+                <span className="text-[11px] text-nb-muted truncate max-w-[90px]">{activeLoadedModelName}</span>
+              ) : null}
+            </label>
+          ) : null}
           <div className="flex max-h-60 flex-col overflow-y-auto">
             {models.map(m => (
               <button
@@ -149,6 +173,9 @@ export function ModelMenu({
                   if (!sameRef(model, m.ref)) onModel(m.ref);
                 }}>
                 <span className="min-w-0 flex-1 truncate text-nb-fg">{m.label}</span>
+                {m.name === activeLoadedModelName ? (
+                  <span className="shrink-0 text-[10px] text-nb-muted">{t('composer.loaded')}</span>
+                ) : null}
                 <CheckIcon size={14} className={sameRef(model, m.ref) ? 'text-nb-accent' : 'invisible'} />
               </button>
             ))}

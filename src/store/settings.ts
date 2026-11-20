@@ -38,6 +38,8 @@ export interface Settings {
   analyticsStats: boolean;
   /** A glowing border on the pages a working run acts on. */
   pageBorder: boolean;
+  /** Prefer currently loaded model in local providers (LM Studio / Ollama) to avoid VRAM oversubscription. */
+  preferLoadedModel: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -57,6 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
   analyticsPing: true,
   analyticsStats: true,
   pageBorder: true,
+  preferLoadedModel: true,
 };
 
 /** Stored settings over the defaults, so a field added later has its default. */

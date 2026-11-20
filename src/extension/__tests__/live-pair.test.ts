@@ -21,7 +21,7 @@ import {
   type ProviderConfig,
   type Settings,
 } from '@src/store/settings';
-import { livePair } from '../models';
+import { livePair, resolveModel } from '../models';
 import { resolveProfile } from '@src/llm';
 
 /** A chrome.storage with a local and a session area, as plain maps. */
@@ -267,5 +267,121 @@ describe('the conversation record', () => {
     const stored = await getConversation('c');
     expect(stored?.title).toBe('u');
     expect(stored).not.toHaveProperty('model');
+  });
+});
+
+describe('resolveModel with preferLoadedModel', () => {
+  it('dynamically uses active loaded LM Studio model instead of configured model', async () => {
+    const fetchSpy = vi.fn(async (url: string | URL) => {
+      if (String(url).includes('/api/v0/models')) {
+        return new Response(
+          JSON.stringify({
+            data: [
+              { id: 'qwen3.8-9b-distill', state: 'loaded', loaded_context_length: 36096, max_context_length: 262144 },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response('{}', { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    fakeChrome({
+      'nb.settings': settings({ preferLoadedModel: true }),
+      'nb.providers': [
+        {
+          id: 'lm1',
+          kind: 'lmstudio',
+          name: 'LM Studio',
+          baseUrl: 'http://127.0.0.1:1234',
+          models: [{ name: 'lfm3-1.7b' }],
+        },
+      ],
+      'nb.keys': {},
+    });
+
+    const resolved = await resolveModel({
+      model: { providerId: 'lm1', model: 'lfm3-1.7b' },
+      reasoning: 'medium',
+    });
+
+    expect(resolved.ref.model).toBe('qwen3.8-9b-distill');
+    expect(resolved.profile.contextWindow).toBe(36096);
+  });
+
+  it('falls back to chosen model if no model is loaded on LM Studio', async () => {
+    const fetchSpy = vi.fn(async (url: string | URL) => {
+      if (String(url).includes('/api/v0/models')) {
+        return new Response(
+          JSON.stringify({
+            data: [{ id: 'lfm3-1.7b', state: 'not-loaded', max_context_length: 262144 }],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response('{}', { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    fakeChrome({
+      'nb.settings': settings({ preferLoadedModel: true }),
+      'nb.providers': [
+        {
+          id: 'lm1',
+          kind: 'lmstudio',
+          name: 'LM Studio',
+          baseUrl: 'http://127.0.0.1:1234',
+          models: [{ name: 'lfm3-1.7b' }],
+        },
+      ],
+      'nb.keys': {},
+    });
+
+    const resolved = await resolveModel({
+      model: { providerId: 'lm1', model: 'lfm3-1.7b' },
+      reasoning: 'medium',
+    });
+
+    expect(resolved.ref.model).toBe('lfm3-1.7b');
+  });
+
+  it('strictly uses chosen model when preferLoadedModel is false', async () => {
+    const fetchSpy = vi.fn(async (url: string | URL) => {
+      if (String(url).includes('/api/v0/models')) {
+        return new Response(
+          JSON.stringify({
+            data: [
+              { id: 'qwen3.8-9b-distill', state: 'loaded', loaded_context_length: 36096 },
+              { id: 'lfm3-1.7b', state: 'not-loaded' },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response('{}', { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    fakeChrome({
+      'nb.settings': settings({ preferLoadedModel: false }),
+      'nb.providers': [
+        {
+          id: 'lm1',
+          kind: 'lmstudio',
+          name: 'LM Studio',
+          baseUrl: 'http://127.0.0.1:1234',
+          models: [{ name: 'lfm3-1.7b' }],
+        },
+      ],
+      'nb.keys': {},
+    });
+
+    const resolved = await resolveModel({
+      model: { providerId: 'lm1', model: 'lfm3-1.7b' },
+      reasoning: 'medium',
+    });
+
+    expect(resolved.ref.model).toBe('lfm3-1.7b');
   });
 });

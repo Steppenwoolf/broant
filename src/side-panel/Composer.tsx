@@ -180,6 +180,9 @@ export function Composer({
   shortcuts = [],
   onLaunch,
   noModel = false,
+  preferLoaded,
+  onPreferLoaded,
+  activeLoadedModelName,
 }: {
   active: boolean;
   mode: PermissionMode;
@@ -223,6 +226,9 @@ export function Composer({
   onLaunch?: (item: LauncherItem) => void;
   /** No model is set up: nothing can be typed, attached or recorded until one is. */
   noModel?: boolean;
+  preferLoaded?: boolean;
+  onPreferLoaded?: (prefer: boolean) => void;
+  activeLoadedModelName?: string | null;
 }) {
   const [text, setText] = useState('');
   const [selected, setSelected] = useState(0);
@@ -605,7 +611,27 @@ export function Composer({
             running={active}
             onModel={onModel}
             onReasoning={next => onReasoning?.(next)}
+            preferLoaded={preferLoaded}
+            onPreferLoaded={onPreferLoaded}
+            activeLoadedModelName={activeLoadedModelName}
           />
+          {onPreferLoaded !== undefined ? (
+            <label
+              className="flex items-center gap-1.5 cursor-pointer select-none rounded-full px-2 py-1 text-xs text-nb-muted hover:border-nb-border hover:text-nb-fg border border-transparent"
+              title={
+                activeLoadedModelName
+                  ? `${t('composer.preferLoadedTooltip')} (${activeLoadedModelName})`
+                  : t('composer.preferLoadedTooltip')
+              }>
+              <input
+                type="checkbox"
+                checked={preferLoaded}
+                onChange={e => onPreferLoaded(e.target.checked)}
+                className="size-3.5 rounded border-nb-border text-nb-accent focus:ring-nb-accent/40 accent-nb-accent cursor-pointer"
+              />
+              <span className="whitespace-nowrap">{t('composer.loaded')}</span>
+            </label>
+          ) : null}
           <span className="flex-1" />
           {transcribe !== undefined ? (
             <>

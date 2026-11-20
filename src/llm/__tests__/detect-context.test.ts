@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectContext } from '../connection';
+import { detectActiveLoadedModel, detectContext } from '../connection';
 import { resolveProfile } from '../profiles';
 
 function server(routes: Record<string, unknown>): typeof fetch {
@@ -62,6 +62,46 @@ describe('context detection', () => {
     expect(
       await detectContext({ kind: 'lmstudio', modelName: 'm' }, server({ '/api/v0/models': { data: [{ id: 'm' }] } })),
     ).toEqual({ loaded: false });
+  });
+
+  it('detects active loaded model from LM Studio /api/v0/models', async () => {
+    const fetchFn = server({
+      '/api/v0/models': {
+        data: [
+          { id: 'not-me', state: 'not-loaded' },
+          { id: 'qwen3.8-9b-distill', state: 'loaded', loaded_context_length: 36096, max_context_length: 262144 },
+        ],
+      },
+    });
+    expect(await detectActiveLoadedModel({ kind: 'lmstudio' }, fetchFn)).toEqual({
+      modelName: 'qwen3.8-9b-distill',
+      loadedContextLength: 36096,
+      maxContextLength: 262144,
+    });
+  });
+
+  it('detects active loaded model from Ollama /api/ps', async () => {
+    const fetchFn = server({
+      '/api/ps': {
+        models: [{ name: 'qwen3:8b', context_length: 32768 }],
+      },
+    });
+    expect(await detectActiveLoadedModel({ kind: 'ollama' }, fetchFn)).toEqual({
+      modelName: 'qwen3:8b',
+      loadedContextLength: 32768,
+    });
+  });
+
+  it('returns null when no model is loaded on LM Studio or Ollama', async () => {
+    expect(
+      await detectActiveLoadedModel(
+        { kind: 'lmstudio' },
+        server({ '/api/v0/models': { data: [{ id: 'm', state: 'not-loaded' }] } }),
+      ),
+    ).toBeNull();
+    expect(
+      await detectActiveLoadedModel({ kind: 'ollama' }, server({ '/api/ps': { models: [] } })),
+    ).toBeNull();
   });
 
   it('caps the window the user set by what the server loaded or would load', () => {
