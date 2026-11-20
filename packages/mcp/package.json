@@ -4,6 +4,11 @@
   "description": "Native Model Context Protocol (MCP) server bridging AI clients to BroAnt Chrome extension",
   "type": "module",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Steppenwoolf/broant.git",
+    "directory": "packages/mcp"
+  },
   "bin": {
     "broant-mcp": "./dist/cli.js",
     "nanobrowser-mcp": "./dist/cli.js"

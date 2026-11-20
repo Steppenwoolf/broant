@@ -57,7 +57,7 @@ Unlike headless tools (Playwright/Puppeteer) that launch empty profiles and trig
 ### 1. Build & Load the Extension
 ```bash
 # Clone the repository
-git clone https://github.com/Steppenwoolf/nanobrowser.git broant
+git clone https://github.com/Steppenwoolf/broant.git
 cd broant
 
 # Install dependencies and build extension
