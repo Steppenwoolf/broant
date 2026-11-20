@@ -107,6 +107,31 @@ export function createNanobrowserMcpServer(hub: BridgeHub, port: number): McpSer
       const header = res.session_id
         ? `session_id: ${res.session_id} | tab_id: ${res.tab_id ?? 'unknown'}\n\n`
         : '';
+
+      if (params.tool === 'screenshot' && res.data && typeof res.data === 'object') {
+        const payload = (res.data as Record<string, unknown>).data as Record<string, unknown> | undefined;
+        const base64 = (payload?.base64 ?? (res.data as Record<string, unknown>).base64) as string | undefined;
+        const mimeType = ((payload?.mimeType ?? (res.data as Record<string, unknown>).mimeType) as string | undefined) || 'image/png';
+        const width = payload?.width ?? 'auto';
+        const height = payload?.height ?? 'auto';
+
+        if (base64) {
+          return {
+            content: [
+              {
+                type: 'image' as const,
+                data: base64,
+                mimeType,
+              },
+              {
+                type: 'text' as const,
+                text: `${header}Screenshot captured successfully (${width}x${height} px, ${mimeType}).`,
+              },
+            ],
+          };
+        }
+      }
+
       const body = params.wrapOutput
         ? wrapUntrustedContent(res.data, params.tool)
         : JSON.stringify(res.data, null, 2);
@@ -342,6 +367,64 @@ export function createNanobrowserMcpServer(hub: BridgeHub, port: number): McpSer
         };
       } catch (err) {
         return formatBridgeError(err, port);
+      }
+    },
+  );
+
+  // 9. Take visual screenshot (native MCP Image)
+  server.tool(
+    'browser_screenshot',
+    'Capture a visual screenshot of the current page, element, or full scrollable area. Returns native MCP image content for multimodal AI assistants.',
+    {
+      session_id: z.string().optional().describe('Existing session_id to reuse'),
+      ref: z.string().optional().describe('Element ref (e.g. "e12") to crop screenshot to that element only'),
+      full_page: z.boolean().default(false).describe('Capture entire scrollable page height instead of just viewport'),
+      labels: z.boolean().default(false).describe('Draw interactive bounding boxes and ref labels onto the screenshot'),
+    },
+    async ({ session_id, ref, full_page, labels }) =>
+      invokeDirectTool({
+        tool: 'screenshot',
+        args: { ref, fullPage: full_page, labels },
+        sessionId: session_id,
+        timeoutMs: 35_000,
+        wrapOutput: false,
+      }),
+  );
+
+  // MCP Resource: Open tabs
+  server.resource(
+    'open-tabs',
+    'browser://tabs',
+    {
+      description: 'List of currently open browser tabs and active sessions',
+      mimeType: 'application/json',
+    },
+    async (uri: URL) => {
+      const requestId = crypto.randomUUID();
+      try {
+        const res = await hub.sendCommand<BridgeStatusResult>(
+          { type: 'get_status', request_id: requestId },
+          { correlationId: requestId, expectTerminal: 'status_result', timeoutMs: 10_000 },
+        );
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              mimeType: 'application/json',
+              text: JSON.stringify(res.open_tabs ?? [], null, 2),
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              mimeType: 'application/json',
+              text: JSON.stringify({ error: String(err) }),
+            },
+          ],
+        };
       }
     },
   );

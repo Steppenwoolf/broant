@@ -80,6 +80,13 @@ export class BridgeToolSessionManager {
 
     this.sessions.set(session.id, managed);
     this.tabToSession.set(tabId, session.id);
+
+    if (typeof chrome !== 'undefined' && chrome.scripting?.executeScript) {
+      void import('@src/extension/border').then(({ injectBorder }) => {
+        void injectBorder(tabId, 'on').catch(() => undefined);
+      }).catch(() => undefined);
+    }
+
     return managed;
   }
 
@@ -108,6 +115,12 @@ export class BridgeToolSessionManager {
     if (!entry) return false;
     this.sessions.delete(sessionId);
     this.tabToSession.delete(entry.tabId);
+
+    if (typeof chrome !== 'undefined' && chrome.scripting?.executeScript) {
+      void import('@src/extension/border').then(({ injectBorder }) => {
+        void injectBorder(entry.tabId, 'off').catch(() => undefined);
+      }).catch(() => undefined);
+    }
 
     try {
       const controller = await this.getController();
