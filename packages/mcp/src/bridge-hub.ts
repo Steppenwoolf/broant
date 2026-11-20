@@ -122,22 +122,14 @@ export class BridgeHub extends EventEmitter {
 
       // Channel for Chrome extension (/ or /extension)
       if (urlPath === '/' || urlPath === '/extension') {
-        // CSWSH protection: origin must be chrome-extension:// or loopback
-        if (origin) {
-          const isExtension = origin.startsWith('chrome-extension://');
-          let isLoopback = false;
-          try {
-            const u = new URL(origin);
-            isLoopback = u.hostname === '127.0.0.1' || u.hostname === 'localhost' || u.hostname === '[::1]';
-          } catch {
-            isLoopback = false;
-          }
-          if (!isExtension && !isLoopback) {
-            logStderr('WARN', 'Blocked non-extension WebSocket origin (CSWSH guard)', { origin });
-            socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
-            socket.destroy();
-            return;
-          }
+        // Strict CSWSH protection: only legitimate chrome-extension:// origins allowed
+        if (!origin || !origin.startsWith('chrome-extension://')) {
+          logStderr('WARN', 'Blocked non-extension WebSocket origin on /extension channel (strict CSWSH guard)', {
+            origin: origin ?? 'none',
+          });
+          socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+          socket.destroy();
+          return;
         }
         wss.handleUpgrade(req, socket, head, ws => this.handleExtensionSocket(ws, origin));
         return;

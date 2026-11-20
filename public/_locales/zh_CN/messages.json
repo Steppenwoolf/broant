@@ -1,17 +1,17 @@
 {
   "extName": {
-    "message": "Nanobrowser"
+    "message": "BroAnt"
   },
   "extDescription": {
-    "message": "在你的浏览器中工作的 AI 智能体，位于页面旁的侧边栏中"
+    "message": "在你的浏览器中工作的 AI 智能体与 MCP 桥接器，位于页面旁的侧边栏中"
   },
   "actionTitle": {
-    "message": "打开 Nanobrowser"
+    "message": "打开 BroAnt"
   },
   "commandOpenPanel": {
-    "message": "打开 Nanobrowser 侧边栏"
+    "message": "打开 BroAnt 侧边栏"
   },
   "menuAskAboutSelection": {
-    "message": "向 Nanobrowser 询问这段内容"
+    "message": "向 BroAnt 询问这段内容"
   }
 }

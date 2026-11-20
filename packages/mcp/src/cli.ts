@@ -73,6 +73,18 @@ async function main() {
     process.exit(0);
   }
 
+  const isLoopbackHost =
+    parsed.host === '127.0.0.1' ||
+    parsed.host === 'localhost' ||
+    parsed.host === '::1' ||
+    parsed.host === '[::1]';
+  if (!isLoopbackHost) {
+    console.error(
+      `[broant-mcp] Security Error: --host must be a local loopback address (127.0.0.1, localhost, [::1]). Binding to external interface "${parsed.host}" is prohibited for security reasons.`,
+    );
+    process.exit(1);
+  }
+
   const envPortStr = process.env.BROANT_BRIDGE_PORT || process.env.NANOBROWSER_BRIDGE_PORT;
   if (envPortStr) {
     const envPort = parseInt(envPortStr, 10);

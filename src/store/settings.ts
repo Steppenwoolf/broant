@@ -66,7 +66,7 @@ export const DEFAULT_SETTINGS: Settings = {
   analyticsStats: true,
   pageBorder: true,
   preferLoadedModel: true,
-  bridgeEnabled: true,
+  bridgeEnabled: false,
   bridgeServerUrl: 'ws://127.0.0.1:8765',
   bridgeAuthToken: 'broant-secret-key',
 };

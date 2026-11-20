@@ -8,7 +8,7 @@ export interface BridgeConfig {
 }
 
 export const DEFAULT_BRIDGE_CONFIG: BridgeConfig = {
-  enabled: true,
+  enabled: false,
   serverUrl: 'ws://127.0.0.1:8765',
   authToken: 'broant-secret-key',
   allowedDomains: ['*'],

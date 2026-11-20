@@ -1,6 +1,6 @@
-# Contributing to Nanobrowser
+# Contributing to BroAnt
 
-Thank you for your interest in contributing to Nanobrowser! Every contribution helps make it better for everyone.
+Thank you for your interest in contributing to BroAnt! Every contribution helps make it better for everyone.
 
 ## Quick start
 
