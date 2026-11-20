@@ -16,6 +16,58 @@ export const DEFAULT_BRIDGE_CONFIG: BridgeConfig = {
 
 export type ApprovalPolicy = 'deny' | 'forward_to_bridge' | 'auto_safe';
 
+export type DirectToolName =
+  | 'observe'
+  | 'act'
+  | 'fill'
+  | 'navigate'
+  | 'text'
+  | 'wait'
+  | 'tabs'
+  | 'upload'
+  | 'dialog'
+  | 'ask'
+  | 'screenshot';
+
+export interface CallToolRequest {
+  type: 'call_tool';
+  action?: 'call_tool';
+  auth_token: string;
+  request_id: string;
+  session_id?: string;
+  target?: {
+    mode?: 'active_tab' | 'new_tab' | 'tab_id';
+    tab_id?: number;
+    url?: string;
+  };
+  tool: DirectToolName;
+  args?: Record<string, unknown>;
+  pruning?: 'standard' | 'compact';
+  timeout_ms?: number;
+}
+
+export interface CloseToolSessionRequest {
+  type: 'close_session';
+  auth_token: string;
+  request_id: string;
+  session_id: string;
+}
+
+export interface ToolResultResponse {
+  type: 'tool_result';
+  request_id: string;
+  session_id: string;
+  tab_id: number;
+  ok: boolean;
+  data?: unknown;
+  error?: {
+    code: string;
+    message: string;
+    retryable?: boolean;
+  };
+  duration_ms: number;
+}
+
 export type BridgeInboundMessage =
   | {
       type: 'auth_ack';
@@ -53,7 +105,9 @@ export type BridgeInboundMessage =
       type: 'get_status';
       auth_token: string;
       request_id: string;
-    };
+    }
+  | CallToolRequest
+  | CloseToolSessionRequest;
 
 export type BridgeOutboundMessage =
   | {
@@ -96,4 +150,5 @@ export type BridgeOutboundMessage =
       request_id: string;
       active_tasks: string[];
       open_tabs: Array<{ id: number; url: string; title: string; active: boolean }>;
-    };
+    }
+  | ToolResultResponse;

@@ -59,6 +59,7 @@ export const SnapshotArgsSchema = z.strictObject({
     .optional()
     .describe('"interactive" prints only actionable elements and their containers'),
   window: z.enum(['viewport', 'near', 'page']).optional().describe('How much of the page to print'),
+  pruning: z.enum(['standard', 'compact']).optional().describe('DOM pruning profile for reducing token footprint'),
 });
 
 export const FindArgsSchema = z.strictObject({

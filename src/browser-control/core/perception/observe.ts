@@ -10,6 +10,7 @@ import type { FrameOwner, ONode, RenderedLine } from './outline';
 import { applyBudget, assignRefs, interactiveOnly, MAX_TREE_DEPTH, renderLines, stitchFrames } from './outline';
 import { applyWindow, budgetByDistance, nodeSpans, windowSpan } from './window';
 import type { WindowMode } from './window';
+import { PRUNING_PRESETS, pruneOutlineTree, type PruningMode } from './pruning';
 
 /** The default budget: 30,000 characters. */
 export const DEFAULT_BUDGET = 30_000;
@@ -21,6 +22,8 @@ export interface ObserveOptions {
   /** Only the subtree of this node (resolved from a ref by the caller). */
   scope?: { frameId: string; backendNodeId: number };
   budget: number;
+  /** DOM pruning mode for reducing token footprint on smaller models */
+  pruning?: PruningMode;
 }
 
 export interface ObservationEntry {
@@ -160,24 +163,30 @@ export function buildObservation(capture: Capture, registry: RefRegistry, option
       );
   }
   if (options.mode === 'interactive') selected = interactiveOnly(selected);
+  if (options.pruning === 'compact') {
+    selected = pruneOutlineTree(selected, PRUNING_PRESETS.compact);
+  }
+
+  const effectiveBudget =
+    options.pruning === 'compact' ? Math.min(options.budget, PRUNING_PRESETS.compact.maxTotalChars) : options.budget;
 
   const all = renderLines(selected);
   let lines: RenderedLine[];
   if (spans && viewportSpan) {
     // Lines farthest from the viewport are cut first.
-    const cut = budgetByDistance(all, spans, viewportSpan, options.budget);
+    const cut = budgetByDistance(all, spans, viewportSpan, effectiveBudget);
     lines = cut.lines;
     if (cut.cutLines) {
       notices.push(
-        `… outline cut at ${options.budget.toLocaleString('en')} characters, farthest from the viewport first: ${cut.cutLines} lines, ${cut.cutAbove} actionable elements above and ${cut.cutBelow} below not shown. Use scope, mode "interactive" or find to see them.`,
+        `… outline cut at ${effectiveBudget.toLocaleString('en')} characters, farthest from the viewport first: ${cut.cutLines} lines, ${cut.cutAbove} actionable elements above and ${cut.cutBelow} below not shown. Use scope, mode "interactive" or find to see them.`,
       );
     }
   } else {
-    const cut = applyBudget(all, options.budget);
+    const cut = applyBudget(all, effectiveBudget);
     lines = cut.lines;
     if (cut.cutLines) {
       notices.push(
-        `… outline cut at ${options.budget.toLocaleString('en')} characters: ${cut.cutLines} more lines, ${cut.cutRefs} actionable elements not shown. Use scope, mode "interactive" or find to see them.`,
+        `… outline cut at ${effectiveBudget.toLocaleString('en')} characters: ${cut.cutLines} more lines, ${cut.cutRefs} actionable elements not shown. Use scope, mode "interactive" or find to see them.`,
       );
     }
   }

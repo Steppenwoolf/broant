@@ -27,6 +27,8 @@ export { chromeAttacher, ChromeTabConnection, isRestrictedUrl } from './host/con
 export { chromeTabHost, chromeEpochStore } from './host/chrome-host';
 export { PuppeteerFrameTopology, listFrames, readFrameTree, checkFrameAccessors } from './host/frame-topology';
 export type { FrameInfo, AccessorCheck } from './host/frame-topology';
+export { PRUNING_PRESETS, pruneOutlineTree, pruneOutlineNode } from './core/perception/pruning';
+export type { PruningConfig, PruningMode } from './core/perception/pruning';
 
 /** The controller wired to Chrome: chrome.debugger through Puppeteer, chrome.tabs, chrome.storage. */
 export function createChromeController(options: { prompt?: UserPrompt } = {}): Promise<Controller> {

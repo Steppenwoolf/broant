@@ -1,13 +1,59 @@
 import type { BridgeClient } from './client';
-import type { BridgeInboundMessage } from './types';
+import type { BridgeInboundMessage, CallToolRequest, CloseToolSessionRequest } from './types';
+import { BridgeToolSessionManager } from './tool-sessions';
 import type { RunManager, PanelConnection } from '@src/extension/run-manager';
 import type { PanelEvent } from '@src/ui/protocol';
 
+function resolveToolAndArgs(
+  toolName: string,
+  rawArgs: Record<string, unknown> = {},
+): { tool: string; args: Record<string, unknown> } {
+  let tool = toolName;
+  const args = { ...rawArgs };
+
+  if (tool === 'observe') {
+    tool = 'snapshot';
+  } else if (tool === 'act') {
+    tool = 'click';
+  } else if (tool === 'fill') {
+    if (args.fields) {
+      tool = 'fill_form';
+    } else {
+      tool = 'set';
+    }
+  } else if (tool === 'text') {
+    tool = 'read';
+  }
+
+  // Normalize target format
+  if ((tool === 'click' || tool === 'hover') && args.ref && !args.target) {
+    args.target = { ref: args.ref };
+    delete args.ref;
+  }
+  if (tool === 'set') {
+    if (args.ref && !args.target) {
+      args.target = { ref: args.ref };
+      delete args.ref;
+    }
+    if (args.text !== undefined && args.value === undefined) {
+      args.value = args.text;
+      delete args.text;
+    }
+  }
+
+  return { tool, args };
+}
+
 export class BridgeDispatcher {
   private activeTasks: Map<string, { tabId: number; cancel: () => void }> = new Map();
+  private toolSessions = new BridgeToolSessionManager();
 
   constructor(private client: BridgeClient, private runManager: RunManager) {
     this.client.onMessage(msg => void this.dispatch(msg));
+  }
+
+  getToolSessions(): BridgeToolSessionManager {
+    return this.toolSessions;
   }
 
   async dispatch(msg: BridgeInboundMessage) {
@@ -36,8 +82,120 @@ export class BridgeDispatcher {
       return;
     }
 
+    if (msg.type === 'call_tool' || (msg as { action?: string }).action === 'call_tool') {
+      await this.handleCallTool(msg as CallToolRequest);
+      return;
+    }
+
+    if (msg.type === 'close_session') {
+      await this.handleCloseSession(msg as CloseToolSessionRequest);
+      return;
+    }
+
     if (msg.type === 'execute_task' || (msg as { action?: string }).action === 'execute_task') {
       await this.handleExecuteTask(msg as Extract<BridgeInboundMessage, { type: 'execute_task' }>);
+    }
+  }
+
+  private async resolveTargetTab(target?: {
+    mode?: 'active_tab' | 'new_tab' | 'tab_id';
+    tab_id?: number;
+    url?: string;
+  }): Promise<number> {
+    if (target?.tab_id) return target.tab_id;
+    if (target?.mode === 'new_tab' || target?.url) {
+      const newTab = await chrome.tabs.create({ url: target?.url || 'about:blank' });
+      if (newTab.id) return newTab.id;
+    }
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (activeTab?.id) return activeTab.id;
+    const [anyTab] = await chrome.tabs.query({});
+    if (anyTab?.id) return anyTab.id;
+    const created = await chrome.tabs.create({ url: 'about:blank' });
+    if (created.id) return created.id;
+    throw new Error('No target tab available in browser');
+  }
+
+  private async handleCloseSession(msg: CloseToolSessionRequest) {
+    const closed = await this.toolSessions.close(msg.session_id);
+    this.client.send({
+      type: 'tool_result',
+      request_id: msg.request_id,
+      session_id: msg.session_id,
+      tab_id: -1,
+      ok: true,
+      data: { closed },
+      duration_ms: 0,
+    });
+  }
+
+  private async handleCallTool(msg: CallToolRequest) {
+    const startTime = Date.now();
+    const timeoutMs = msg.timeout_ms ?? 30_000;
+    const abortController = new AbortController();
+    const timer = setTimeout(() => abortController.abort(), timeoutMs);
+
+    let currentSessionId = msg.session_id ?? '';
+    let currentTabId = -1;
+
+    try {
+      const managed = await this.toolSessions.acquire(msg.session_id, () =>
+        this.resolveTargetTab(msg.target),
+      );
+      currentSessionId = managed.sessionId;
+      currentTabId = managed.tabId;
+
+      const { tool: resolvedTool, args: resolvedArgs } = resolveToolAndArgs(msg.tool, msg.args);
+      if (resolvedTool === 'snapshot' && msg.pruning) {
+        resolvedArgs.pruning = msg.pruning;
+      }
+
+      const result = await Promise.race([
+        this.toolSessions.runExclusive(managed, s =>
+          s.call(resolvedTool, resolvedArgs, { signal: abortController.signal }),
+        ),
+        new Promise<never>((_, reject) => {
+          abortController.signal.addEventListener('abort', () =>
+            reject(new Error(`Tool call timed out after ${timeoutMs}ms`)),
+          );
+        }),
+      ]);
+
+      clearTimeout(timer);
+
+      this.client.send({
+        type: 'tool_result',
+        request_id: msg.request_id,
+        session_id: currentSessionId,
+        tab_id: currentTabId,
+        ok: result.ok,
+        data: result.ok ? result : undefined,
+        error: !result.ok
+          ? {
+              code: result.error?.code ?? 'TOOL_ERROR',
+              message: result.error?.message ?? 'Tool execution failed',
+              retryable: result.error?.retryable,
+            }
+          : undefined,
+        duration_ms: Date.now() - startTime,
+      });
+    } catch (err: unknown) {
+      clearTimeout(timer);
+      const isTimeout = abortController.signal.aborted;
+      const errorObj = err as { code?: string; message?: string; retryable?: boolean };
+      this.client.send({
+        type: 'tool_result',
+        request_id: msg.request_id,
+        session_id: currentSessionId,
+        tab_id: currentTabId,
+        ok: false,
+        error: {
+          code: isTimeout ? 'TIMEOUT' : errorObj.code ?? 'TOOL_EXECUTION_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+          retryable: isTimeout ? true : Boolean(errorObj.retryable),
+        },
+        duration_ms: Date.now() - startTime,
+      });
     }
   }
 
@@ -46,19 +204,10 @@ export class BridgeDispatcher {
     const startTime = Date.now();
     let stepsCount = 0;
 
-    // Resolve target tab
     let tabId: number | null = null;
-    if (target?.tab_id) {
-      tabId = target.tab_id;
-    } else if (target?.mode === 'new_tab' || target?.url) {
-      const newTab = await chrome.tabs.create({ url: target?.url || 'about:blank' });
-      tabId = newTab.id ?? null;
-    } else {
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      tabId = activeTab?.id ?? null;
-    }
-
-    if (!tabId) {
+    try {
+      tabId = await this.resolveTargetTab(target);
+    } catch {
       this.client.send({
         type: 'task_result',
         task_id,

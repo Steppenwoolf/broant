@@ -33,7 +33,12 @@ function shownOf(observation: Observation, refs: string[]): Array<[string, Shown
 /** Captures the tab and builds an observation. Does not change the session's known set. */
 export async function observeTab(
   ctx: ToolContext,
-  options: { mode?: 'interactive' | 'all'; scope?: RefRecord; window?: 'viewport' | 'near' | 'page' } = {},
+  options: {
+    mode?: 'interactive' | 'all';
+    scope?: RefRecord;
+    window?: 'viewport' | 'near' | 'page';
+    pruning?: 'standard' | 'compact';
+  } = {},
 ): Promise<Observation> {
   const attachment = await ctx.attach();
   const tab = ctx.tab();
@@ -51,6 +56,7 @@ export async function observeTab(
     window: options.window,
     scope: options.scope ? { frameId: options.scope.frameId, backendNodeId: options.scope.backendNodeId } : undefined,
     budget: ctx.session.config.budget,
+    pruning: options.pruning,
   });
   for (const secret of observation.secrets) rememberSecret(tab.secrets, secret);
   if (!options.scope && (options.mode ?? 'all') === 'all') {
@@ -84,7 +90,12 @@ export async function snapshot(
 ): Promise<ToolOutcome<SnapshotData>> {
   const tab = ctx.tab();
   const scope = args.scope ? lookupRef(ctx.controller.registry, ctx.session.known, args.scope, tab.tabId) : undefined;
-  const observation = await observeTab(ctx, { mode: args.mode, scope, window: args.window });
+  const observation = await observeTab(ctx, {
+    mode: args.mode,
+    scope,
+    window: args.window,
+    pruning: (args as { pruning?: 'standard' | 'compact' }).pruning,
+  });
   const previous = ctx.session.seen.get(tab.tabId);
   if (scope) ctx.session.known.add(tab.tabId, shownOf(observation, observation.refs));
   // A full outline, or a diff against it, leaves the known set equal to the fresh outline's refs: refs added by a

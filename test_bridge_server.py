@@ -26,7 +26,7 @@ async def handler(websocket):
         async for message in websocket:
             data = json.loads(message)
             msg_type = data.get("type")
-            logging.info(f"[<--] Received: {msg_type} -> {json.dumps(data, ensure_ascii=False)}")
+            logging.info(f"[<--] Received: {msg_type}")
 
             if msg_type == "hello":
                 token = data.get("auth_token")
@@ -36,8 +36,8 @@ async def handler(websocket):
                     logging.info("[✓] Client authenticated successfully via token!")
                     await websocket.send(json.dumps({"type": "auth_ack", "ok": True}))
 
-                    # Trigger a status query 1s after connect
-                    asyncio.create_task(query_status(websocket))
+                    # Schedule status query and Direct Tool RPC demo
+                    asyncio.create_task(demo_flow(websocket))
                 else:
                     logging.warning(f"[!] Invalid auth token: {token}")
                     await websocket.send(json.dumps({"type": "auth_ack", "ok": False, "error": "Invalid auth token"}))
@@ -48,7 +48,7 @@ async def handler(websocket):
                 await websocket.send(json.dumps({"type": "pong", "ts": data.get("ts")}))
 
             elif msg_type == "task_accepted":
-                logging.info(f"[✓] Task {data.get('task_id')} accepted by extension on tab {data.get('tab_id')}")
+                logging.info(f"[✓] Task {data.get('task_id')} accepted on tab {data.get('tab_id')}")
 
             elif msg_type == "task_progress":
                 logging.info(f"[*] Progress [{data.get('task_id')}] Step {data.get('step')}: {data.get('summary')}")
@@ -60,9 +60,27 @@ async def handler(websocket):
 
             elif msg_type == "status_result":
                 tabs = data.get("open_tabs", [])
-                logging.info(f"[i] Open tabs in browser: {len(tabs)}")
+                logging.info(f"[i] Open tabs in browser ({len(tabs)} total):")
                 for t in tabs[:5]:
                     logging.info(f"    - Tab {t.get('id')}: {t.get('title')} ({t.get('url')})")
+
+            elif msg_type == "tool_result":
+                req_id = data.get("request_id")
+                ok = data.get("ok")
+                sess_id = data.get("session_id")
+                tab_id = data.get("tab_id")
+                if ok:
+                    logging.info(f"[✓ Tool RPC] Req {req_id} succeeded (session: {sess_id}, tab: {tab_id})")
+                    tool_data = data.get("data", {})
+                    if "text" in tool_data:
+                        # Print outline snapshot snippet
+                        snippet = tool_data["text"][:300].replace("\n", " ")
+                        logging.info(f"    DOM Snapshot snippet: {snippet}...")
+                    else:
+                        logging.info(f"    Result payload: {tool_data}")
+                else:
+                    err = data.get("error", {})
+                    logging.error(f"[✗ Tool RPC] Req {req_id} failed: {err.get('message')} (code: {err.get('code')})")
 
     except websockets.exceptions.ConnectionClosed:
         logging.info("[-] Client disconnected")
@@ -70,13 +88,23 @@ async def handler(websocket):
         connected_clients.discard(websocket)
 
 
-async def query_status(websocket):
+async def demo_flow(websocket):
     await asyncio.sleep(1)
-    logging.info("[-->] Requesting browser status & open tabs...")
+    logging.info("[-->] 1. Requesting browser status & open tabs...")
     await websocket.send(json.dumps({
         "type": "get_status",
         "auth_token": EXPECTED_TOKEN,
         "request_id": "status-req-1"
+    }))
+
+    await asyncio.sleep(2)
+    logging.info("[-->] 2. Demonstrating Direct Tool RPC: 'observe' with compact pruning...")
+    await websocket.send(json.dumps({
+        "type": "call_tool",
+        "auth_token": EXPECTED_TOKEN,
+        "request_id": "tool-observe-1",
+        "tool": "observe",
+        "pruning": "compact"
     }))
 
 
