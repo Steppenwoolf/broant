@@ -1,6 +1,7 @@
 import { DEFAULT_BRIDGE_CONFIG } from './types';
 import type { BridgeConfig, BridgeInboundMessage, BridgeOutboundMessage } from './types';
 import { KeepAliveManager } from './keepalive';
+import { bridgeConnectedStorage } from '@src/store/settings';
 
 export type MessageHandler = (msg: BridgeInboundMessage) => Promise<void> | void;
 
@@ -24,7 +25,43 @@ export class BridgeClient {
     this.config = { ...this.config, ...config };
     if (this.config.enabled) {
       this.connect();
+    } else {
+      this.disconnect();
     }
+  }
+
+  updateConfig(config: Partial<BridgeConfig>) {
+    const prevEnabled = this.config.enabled;
+    const prevUrl = this.config.serverUrl;
+    const prevToken = this.config.authToken;
+    this.config = { ...this.config, ...config };
+
+    if (!this.config.enabled) {
+      this.disconnect();
+    } else if (!prevEnabled || prevUrl !== this.config.serverUrl || prevToken !== this.config.authToken) {
+      this.disconnect();
+      this.config.enabled = true;
+      this.connect();
+    }
+  }
+
+  disconnect() {
+    this.config.enabled = false;
+    this.isConnecting = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.keepAlive.stopHeartbeat();
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch {
+        // ignore
+      }
+      this.ws = null;
+    }
+    void bridgeConnectedStorage.set(false);
   }
 
   onMessage(handler: MessageHandler) {
@@ -43,7 +80,7 @@ export class BridgeClient {
   }
 
   connect() {
-    if (this.isConnecting || this.isConnected()) return;
+    if (!this.config.enabled || this.isConnecting || this.isConnected()) return;
     this.isConnecting = true;
 
     try {
@@ -53,6 +90,7 @@ export class BridgeClient {
         this.isConnecting = false;
         this.reconnectAttempts = 0;
         console.info('[bridge] Connected to server at', this.config.serverUrl);
+        void bridgeConnectedStorage.set(true);
         this.keepAlive.startHeartbeat();
         this.sendHello();
       };
@@ -71,15 +109,18 @@ export class BridgeClient {
         this.isConnecting = false;
         this.keepAlive.stopHeartbeat();
         this.ws = null;
+        void bridgeConnectedStorage.set(false);
         this.scheduleReconnect();
       };
 
       this.ws.onerror = (err) => {
         this.isConnecting = false;
         console.warn('[bridge] WebSocket error:', err);
+        void bridgeConnectedStorage.set(false);
       };
     } catch (e) {
       this.isConnecting = false;
+      void bridgeConnectedStorage.set(false);
       this.scheduleReconnect();
     }
   }

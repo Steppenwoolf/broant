@@ -7,6 +7,7 @@ import { applyTheme } from '@src/ui/theme';
 import type { MessageKey } from '@src/ui/i18n';
 import { GeneralSection } from './GeneralSection';
 import { ProvidersSection } from './ProvidersSection';
+import { BridgeSection } from './BridgeSection';
 import { PermissionsSection } from './PermissionsSection';
 import { ShortcutsSection } from './ShortcutsSection';
 import { MemorySection } from './MemorySection';
@@ -18,6 +19,7 @@ import { websiteUrl } from '@src/ui/links';
 const SECTIONS: Array<{ id: string; label: MessageKey; render: () => JSX.Element }> = [
   { id: 'general', label: 'settings.nav.general', render: () => <GeneralSection /> },
   { id: 'providers', label: 'settings.nav.providers', render: () => <ProvidersSection /> },
+  { id: 'bridge', label: 'settings.nav.bridge', render: () => <BridgeSection /> },
   { id: 'permissions', label: 'settings.nav.permissions', render: () => <PermissionsSection /> },
   { id: 'shortcuts', label: 'settings.nav.shortcuts', render: () => <ShortcutsSection /> },
   { id: 'memory', label: 'settings.nav.memory', render: () => <MemorySection /> },

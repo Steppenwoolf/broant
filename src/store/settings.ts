@@ -40,6 +40,12 @@ export interface Settings {
   pageBorder: boolean;
   /** Prefer currently loaded model in local providers (LM Studio / Ollama) to avoid VRAM oversubscription. */
   preferLoadedModel: boolean;
+  /** Whether the Agent Bridge WebSocket client is enabled. */
+  bridgeEnabled: boolean;
+  /** Agent Bridge WebSocket server URL. */
+  bridgeServerUrl: string;
+  /** Agent Bridge authentication token. */
+  bridgeAuthToken: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -60,6 +66,9 @@ export const DEFAULT_SETTINGS: Settings = {
   analyticsStats: true,
   pageBorder: true,
   preferLoadedModel: true,
+  bridgeEnabled: true,
+  bridgeServerUrl: 'ws://127.0.0.1:8765',
+  bridgeAuthToken: 'nanobrowser-secret-key',
 };
 
 /** Stored settings over the defaults, so a field added later has its default. */
@@ -70,6 +79,10 @@ export function mergeSettings(stored: unknown): Settings {
 export const settingsStorage = createStorage<Settings>('nb.settings', DEFAULT_SETTINGS, {
   liveUpdate: true,
   merge: mergeSettings,
+});
+
+export const bridgeConnectedStorage = createStorage<boolean>('nb.bridge_connected', false, {
+  liveUpdate: true,
 });
 
 export type { ProviderKind };
