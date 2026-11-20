@@ -5,6 +5,17 @@ import { bridgeConnectedStorage } from '@src/store/settings';
 
 export type MessageHandler = (msg: BridgeInboundMessage) => Promise<void> | void;
 
+export function isLoopbackUrl(urlStr: string): boolean {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') return false;
+    const host = parsed.hostname.toLowerCase();
+    return host === '127.0.0.1' || host === 'localhost' || host === '[::1]' || host === '::1';
+  } catch {
+    return false;
+  }
+}
+
 export class BridgeClient {
   private ws: WebSocket | null = null;
   private config: BridgeConfig = DEFAULT_BRIDGE_CONFIG;
@@ -81,6 +92,15 @@ export class BridgeClient {
 
   connect() {
     if (!this.config.enabled || this.isConnecting || this.isConnected()) return;
+
+    if (!isLoopbackUrl(this.config.serverUrl)) {
+      console.error(
+        `[bridge] Security check failed: serverUrl must be a local loopback address (127.0.0.1, localhost, [::1]). Got: ${this.config.serverUrl}`
+      );
+      void bridgeConnectedStorage.set(false);
+      return;
+    }
+
     this.isConnecting = true;
 
     try {

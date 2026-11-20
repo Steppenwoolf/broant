@@ -10,20 +10,39 @@ import { SettingsCard, SettingsRow } from './SettingsCard';
 export function BridgeSection() {
   const settings = useStorage(settingsStorage, DEFAULT_SETTINGS);
   const connected = useStorage(bridgeConnectedStorage, false);
-  const [copied, setCopied] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
+  const [copiedConfig, setCopiedConfig] = useState(false);
+  const [showToken, setShowToken] = useState(false);
 
   const handleCopyToken = () => {
     void navigator.clipboard.writeText(settings.bridgeAuthToken).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopiedToken(true);
+      setTimeout(() => setCopiedToken(false), 2000);
     });
   };
 
-  const statusTone = !settings.bridgeEnabled
-    ? 'bg-nb-border text-nb-muted'
-    : connected
-      ? 'bg-emerald-500 text-white'
-      : 'bg-amber-500 text-white';
+  const handleRegenerateToken = () => {
+    const newToken = crypto.randomUUID();
+    void settingsStorage.set(s => ({
+      ...s,
+      bridgeAuthToken: newToken,
+    }));
+  };
+
+  const handleCopyMcpConfig = () => {
+    const config = {
+      mcpServers: {
+        nanobrowser: {
+          command: 'npx',
+          args: ['-y', 'nanobrowser-mcp', '--token', settings.bridgeAuthToken],
+        },
+      },
+    };
+    void navigator.clipboard.writeText(JSON.stringify(config, null, 2)).then(() => {
+      setCopiedConfig(true);
+      setTimeout(() => setCopiedConfig(false), 2000);
+    });
+  };
 
   const statusText = !settings.bridgeEnabled
     ? t('bridge.disconnected')
@@ -84,11 +103,11 @@ export function BridgeSection() {
         <SettingsRow
           label={t('bridge.authToken')}
           description={t('bridge.authTokenHint')}>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Input
               aria-label={t('bridge.authToken')}
-              type="text"
-              className="w-64 font-mono text-xs"
+              type={showToken ? 'text' : 'password'}
+              className="w-56 font-mono text-xs"
               value={settings.bridgeAuthToken}
               onChange={e =>
                 void settingsStorage.set(s => ({
@@ -99,11 +118,34 @@ export function BridgeSection() {
             />
             <Button
               variant="secondary"
+              onClick={() => setShowToken(prev => !prev)}
+              title={showToken ? t('bridge.hideToken') : t('bridge.showToken')}>
+              {showToken ? t('bridge.hideToken') : t('bridge.showToken')}
+            </Button>
+            <Button
+              variant="secondary"
               onClick={handleCopyToken}
               title="Copy token to clipboard">
-              {copied ? 'Copied' : 'Copy'}
+              {copiedToken ? t('bridge.copied') : 'Copy'}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleRegenerateToken}
+              title={t('bridge.regenerateToken')}>
+              {t('bridge.regenerateToken')}
             </Button>
           </div>
+        </SettingsRow>
+
+        <SettingsRow
+          label="MCP Integration"
+          description="1-Click copy Model Context Protocol server configuration for Claude Code, Cursor, or Antigravity.">
+          <Button
+            variant="primary"
+            onClick={handleCopyMcpConfig}
+            title={t('bridge.copyConfig')}>
+            {copiedConfig ? t('bridge.copied') : t('bridge.copyConfig')}
+          </Button>
         </SettingsRow>
       </SettingsCard>
     </div>
