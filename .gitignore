@@ -14,3 +14,4 @@ coverage
 .nanobrowser
 # Measurement runs write raw data here
 fixtures/.results
+for_neon/
