@@ -122,12 +122,22 @@ export class BridgeHub extends EventEmitter {
 
       // Channel for Chrome extension (/ or /extension)
       if (urlPath === '/' || urlPath === '/extension') {
-        // CSWSH protection: if origin is present and from web, block it
-        if (origin && !origin.startsWith('chrome-extension://') && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
-          logStderr('WARN', 'Blocked non-extension WebSocket origin (CSWSH guard)', { origin });
-          socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
-          socket.destroy();
-          return;
+        // CSWSH protection: origin must be chrome-extension:// or loopback
+        if (origin) {
+          const isExtension = origin.startsWith('chrome-extension://');
+          let isLoopback = false;
+          try {
+            const u = new URL(origin);
+            isLoopback = u.hostname === '127.0.0.1' || u.hostname === 'localhost' || u.hostname === '[::1]';
+          } catch {
+            isLoopback = false;
+          }
+          if (!isExtension && !isLoopback) {
+            logStderr('WARN', 'Blocked non-extension WebSocket origin (CSWSH guard)', { origin });
+            socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+            socket.destroy();
+            return;
+          }
         }
         wss.handleUpgrade(req, socket, head, ws => this.handleExtensionSocket(ws, origin));
         return;
@@ -162,9 +172,8 @@ export class BridgeHub extends EventEmitter {
       this.extensionWs.close(4000, 'Replaced by newer extension connection');
     }
     this.extensionWs = ws;
-    this.extensionAuthed = true;
-    logStderr('INFO', 'Chrome extension connected', { origin: origin ?? 'none' });
-    this.emit('extension_connected');
+    this.extensionAuthed = false;
+    logStderr('INFO', 'Chrome extension socket opened (awaiting hello auth)', { origin: origin ?? 'none' });
 
     ws.on('message', raw => {
       let msg: ExtensionInboundMessage;
@@ -181,7 +190,8 @@ export class BridgeHub extends EventEmitter {
       }
 
       if (msg.type === 'hello') {
-        if (msg.auth_token && !safeTokenEqual(msg.auth_token, this.config.authToken)) {
+        const token = msg.auth_token ?? '';
+        if (!safeTokenEqual(token, this.config.authToken)) {
           logStderr('ERROR', 'Extension auth_token mismatch in hello handshake');
           this.extensionAuthed = false;
           this.safeSend(ws, { type: 'auth_ack', ok: false, error: 'Invalid auth token' });
@@ -190,7 +200,15 @@ export class BridgeHub extends EventEmitter {
         }
         this.extensionAuthed = true;
         this.safeSend(ws, { type: 'auth_ack', ok: true });
+        logStderr('INFO', 'Chrome extension authenticated successfully');
         this.emit('extension_connected');
+        return;
+      }
+
+      if (!this.extensionAuthed) {
+        logStderr('WARN', 'Ignored message from unauthenticated extension socket', {
+          type: (msg as { type?: string }).type,
+        });
         return;
       }
 
@@ -302,6 +320,16 @@ export class BridgeHub extends EventEmitter {
     ws.on('close', () => {
       this.relayUpstreamWs = null;
       logStderr('WARN', 'Lost connection to Leader Hub');
+      if (!this.shuttingDown) {
+        const jitter = Math.floor(Math.random() * 300) + 150;
+        this.reconnectTimer = setTimeout(() => {
+          logStderr('INFO', 'Attempting re-election or reconnecting to Leader...');
+          this.mode = 'idle';
+          void this.start().catch(err => {
+            logStderr('WARN', `Re-election failed: ${err instanceof Error ? err.message : String(err)}`);
+          });
+        }, jitter);
+      }
     });
   }
 
@@ -348,6 +376,21 @@ export class BridgeHub extends EventEmitter {
     // Check if this matches a local pending request
     const local = this.pendingLocal.get(correlationId);
     if (local) {
+      if (msg.type === 'task_accepted' || msg.type === 'task_progress') {
+        const summary = (msg as { summary?: string }).summary || msg.type;
+        logStderr('INFO', `[task:${correlationId}] Progress: ${summary}`);
+        return;
+      }
+      if (
+        local.expectTerminal !== 'none' &&
+        msg.type !== local.expectTerminal &&
+        msg.type !== 'tool_result' &&
+        msg.type !== 'task_result' &&
+        msg.type !== 'status_result' &&
+        msg.type !== 'session_closed'
+      ) {
+        return;
+      }
       clearTimeout(local.timer);
       this.pendingLocal.delete(correlationId);
       local.resolve(msg);
@@ -380,8 +423,25 @@ export class BridgeHub extends EventEmitter {
       }
     }
 
-    const timeout = options.timeoutMs ?? 30_000;
     const { correlationId, expectTerminal } = options;
+
+    if (expectTerminal === 'none') {
+      payload.auth_token = this.config.authToken;
+      if (this.mode === 'leader' && this.extensionWs && this.extensionWs.readyState === WebSocket.OPEN) {
+        this.safeSend(this.extensionWs, payload);
+      } else if (this.mode === 'relay' && this.relayUpstreamWs && this.relayUpstreamWs.readyState === WebSocket.OPEN) {
+        const envelope: RelayEnvelope = {
+          __relay: true,
+          correlation_id: correlationId,
+          expect_terminal: 'none',
+          payload,
+        };
+        this.safeSend(this.relayUpstreamWs, envelope);
+      }
+      return Promise.resolve(undefined as T);
+    }
+
+    const timeout = options.timeoutMs ?? 30_000;
 
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {

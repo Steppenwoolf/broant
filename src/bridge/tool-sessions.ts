@@ -65,7 +65,7 @@ export class BridgeToolSessionManager {
 
     const controller = await this.getController();
     const session = controller.createSession({
-      capabilities: ['core', 'tabs', 'files'],
+      capabilities: ['core', 'tabs'],
       confirm: 'never',
     });
     session.shareTab(tabId);

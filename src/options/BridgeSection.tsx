@@ -2,6 +2,7 @@
 // configure server URL, auth token, and see live connection status.
 import { useState } from 'react';
 import { DEFAULT_SETTINGS, bridgeConnectedStorage, settingsStorage } from '@src/store/settings';
+import { isLoopbackUrl } from '@src/bridge/client';
 import { Button, Input, Switch } from '@src/ui/components';
 import { useStorage } from '@src/ui/hooks';
 import { t } from '@src/ui/i18n';
@@ -34,7 +35,10 @@ export function BridgeSection() {
       mcpServers: {
         nanobrowser: {
           command: 'npx',
-          args: ['-y', 'nanobrowser-mcp', '--token', settings.bridgeAuthToken],
+          args: ['-y', 'nanobrowser-mcp'],
+          env: {
+            NANOBROWSER_BRIDGE_TOKEN: settings.bridgeAuthToken,
+          },
         },
       },
     };
@@ -85,11 +89,20 @@ export function BridgeSection() {
 
         <SettingsRow
           label={t('bridge.serverUrl')}
-          description={t('bridge.serverUrlHint')}>
+          description={
+            <div className="flex flex-col gap-1">
+              <span>{t('bridge.serverUrlHint')}</span>
+              {!isLoopbackUrl(settings.bridgeServerUrl) && (
+                <span className="text-xs font-medium text-rose-500">
+                  Security Warning: Must be a local loopback address (ws://127.0.0.1:*, ws://localhost:*, ws://[::1]:*)
+                </span>
+              )}
+            </div>
+          }>
           <Input
             aria-label={t('bridge.serverUrl')}
             type="text"
-            className="w-72 font-mono text-xs"
+            className={`w-72 font-mono text-xs ${!isLoopbackUrl(settings.bridgeServerUrl) ? 'border-rose-500 focus:ring-rose-500' : ''}`}
             value={settings.bridgeServerUrl}
             onChange={e =>
               void settingsStorage.set(s => ({

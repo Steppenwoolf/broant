@@ -14,7 +14,12 @@ function resolveToolAndArgs(
   if (tool === 'observe') {
     tool = 'snapshot';
   } else if (tool === 'act') {
-    tool = 'click';
+    const actAction = (args.action as string | undefined)?.toLowerCase();
+    if (actAction === 'hover') {
+      tool = 'hover';
+    } else {
+      tool = 'click';
+    }
   } else if (tool === 'fill') {
     if (args.fields) {
       tool = 'fill_form';
@@ -39,6 +44,15 @@ function resolveToolAndArgs(
       args.value = args.text;
       delete args.text;
     }
+  }
+
+  if (tool === 'read' && args.max_chars !== undefined && args.maxChars === undefined) {
+    args.maxChars = args.max_chars;
+    delete args.max_chars;
+  }
+  if (tool === 'screenshot' && args.full_page !== undefined && args.fullPage === undefined) {
+    args.fullPage = args.full_page;
+    delete args.full_page;
   }
 
   return { tool, args };
@@ -104,7 +118,7 @@ export class BridgeDispatcher {
   }): Promise<number> {
     if (target?.tab_id) return target.tab_id;
     if (target?.mode === 'new_tab' || target?.url) {
-      const newTab = await chrome.tabs.create({ url: target?.url || 'about:blank' });
+      const newTab = await chrome.tabs.create({ url: 'about:blank' });
       if (newTab.id) return newTab.id;
     }
     const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -255,6 +269,7 @@ export class BridgeDispatcher {
           if (event.status === 'idle' && stepsCount > 0) {
             isFinished = true;
             this.activeTasks.delete(task_id);
+            this.runManager.connections.delete(connection);
             this.client.send({
               type: 'task_result',
               task_id,
@@ -266,6 +281,7 @@ export class BridgeDispatcher {
           } else if (event.status === 'stopped') {
             isFinished = true;
             this.activeTasks.delete(task_id);
+            this.runManager.connections.delete(connection);
             this.client.send({
               type: 'task_result',
               task_id,
@@ -304,6 +320,7 @@ export class BridgeDispatcher {
     } catch (err) {
       if (!isFinished) {
         isFinished = true;
+        this.runManager.connections.delete(connection);
         this.activeTasks.delete(task_id);
         this.client.send({
           type: 'task_result',

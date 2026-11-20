@@ -198,7 +198,7 @@ export function createNanobrowserMcpServer(hub: BridgeHub, port: number): McpSer
         tool: 'navigate',
         args: { url },
         sessionId: session_id,
-        target: session_id ? undefined : { mode: target_mode, tab_id, url },
+        target: session_id ? undefined : { mode: target_mode, tab_id },
         timeoutMs: 45_000,
         wrapOutput: true,
       }),
@@ -280,11 +280,12 @@ export function createNanobrowserMcpServer(hub: BridgeHub, port: number): McpSer
       session_id: z.string().optional().describe('Session ID (defaults to last active session)'),
       ref: z.string().optional().describe('Optional container/table ref to scope extraction'),
       max_chars: z.number().int().min(500).max(100_000).default(20_000),
+      offset: z.number().int().min(0).default(0).describe('Character offset to continue reading from'),
     },
-    async ({ session_id, ref, max_chars }) =>
+    async ({ session_id, ref, max_chars, offset }) =>
       invokeDirectTool({
         tool: 'text',
-        args: { ref, max_chars },
+        args: { ref, maxChars: max_chars, offset },
         sessionId: session_id,
         wrapOutput: true,
       }),
@@ -302,7 +303,7 @@ export function createNanobrowserMcpServer(hub: BridgeHub, port: number): McpSer
       try {
         await hub.sendCommand(
           { type: 'close_session', request_id: requestId, session_id },
-          { correlationId: requestId, expectTerminal: 'none', timeoutMs: 3_000 },
+          { correlationId: requestId, expectTerminal: 'tool_result', timeoutMs: 5_000 },
         );
         hub.forgetSession(session_id);
         return {
@@ -410,8 +411,8 @@ export function createNanobrowserMcpServer(hub: BridgeHub, port: number): McpSer
           contents: [
             {
               uri: uri.href,
-              mimeType: 'application/json',
-              text: JSON.stringify(res.open_tabs ?? [], null, 2),
+              mimeType: 'text/plain',
+              text: wrapUntrustedContent(res.open_tabs ?? [], 'browser_tabs_resource'),
             },
           ],
         };

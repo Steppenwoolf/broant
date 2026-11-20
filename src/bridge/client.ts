@@ -24,6 +24,7 @@ export class BridgeClient {
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private isConnecting = false;
+  private isAuthenticated = false;
 
   constructor() {
     this.keepAlive = new KeepAliveManager(
@@ -59,6 +60,7 @@ export class BridgeClient {
   disconnect() {
     this.config.enabled = false;
     this.isConnecting = false;
+    this.isAuthenticated = false;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -108,9 +110,11 @@ export class BridgeClient {
 
       this.ws.onopen = () => {
         this.isConnecting = false;
+        this.isAuthenticated = false;
         this.reconnectAttempts = 0;
+        this.missedPongs = 0;
+        this.lastPongAt = Date.now();
         console.info('[bridge] Connected to server at', this.config.serverUrl);
-        void bridgeConnectedStorage.set(true);
         this.keepAlive.startHeartbeat();
         this.sendHello();
       };
@@ -127,6 +131,7 @@ export class BridgeClient {
 
       this.ws.onclose = () => {
         this.isConnecting = false;
+        this.isAuthenticated = false;
         this.keepAlive.stopHeartbeat();
         this.ws = null;
         void bridgeConnectedStorage.set(false);
@@ -168,8 +173,18 @@ export class BridgeClient {
     });
   }
 
+  private lastPongAt = Date.now();
+  private missedPongs = 0;
+
   private sendPing() {
     if (this.isConnected()) {
+      if (this.missedPongs >= 2) {
+        console.warn('[bridge] Missed consecutive pongs from Bridge server; reconnecting');
+        this.missedPongs = 0;
+        this.ws?.close();
+        return;
+      }
+      this.missedPongs++;
       this.send({ type: 'ping', ts: Date.now() });
     }
   }
@@ -181,7 +196,32 @@ export class BridgeClient {
   }
 
   private handleIncoming(msg: BridgeInboundMessage) {
-    if (msg.type === 'pong') return;
+    if (msg.type === 'pong') {
+      this.missedPongs = 0;
+      this.lastPongAt = Date.now();
+      return;
+    }
+
+    if ((msg as { type: string }).type === 'auth_ack') {
+      const ack = msg as { type: 'auth_ack'; ok: boolean; error?: string };
+      if (ack.ok) {
+        console.info('[bridge] Authenticated with Bridge server successfully');
+        this.isAuthenticated = true;
+        void bridgeConnectedStorage.set(true);
+      } else {
+        console.error('[bridge] Bridge server rejected auth token:', ack.error);
+        this.isAuthenticated = false;
+        void bridgeConnectedStorage.set(false);
+        this.disconnect();
+      }
+      return;
+    }
+
+    if (!this.isAuthenticated) {
+      console.warn('[bridge] Ignored message received before authentication completed');
+      return;
+    }
+
     for (const handler of this.messageHandlers) {
       try {
         void handler(msg);
