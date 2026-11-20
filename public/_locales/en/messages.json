@@ -1,17 +1,17 @@
 {
   "extName": {
-    "message": "Nanobrowser"
+    "message": "BroAnt"
   },
   "extDescription": {
-    "message": "An AI agent that works in your browser, in a side panel beside the page"
+    "message": "BroAnt — Hardworking AI Browser Worker & MCP Bridge. Connects Claude Code, Cursor, and local LLMs to your live browser."
   },
   "actionTitle": {
-    "message": "Open Nanobrowser"
+    "message": "Open BroAnt"
   },
   "commandOpenPanel": {
-    "message": "Open the Nanobrowser panel"
+    "message": "Open the BroAnt panel"
   },
   "menuAskAboutSelection": {
-    "message": "Ask Nanobrowser about this"
+    "message": "Ask BroAnt about this"
   }
 }

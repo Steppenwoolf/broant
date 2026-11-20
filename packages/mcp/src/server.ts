@@ -27,9 +27,9 @@ function formatBridgeError(err: unknown, port: number) {
         {
           type: 'text' as const,
           text: [
-            `Nanobrowser Chrome extension is not connected to the local Agent Bridge (ws://127.0.0.1:${port}).`,
+            `BroAnt Chrome extension is not connected to the local Agent Bridge (ws://127.0.0.1:${port}).`,
             'Please verify:',
-            '1. Chrome is running with the Nanobrowser extension enabled.',
+            '1. Chrome is running with the BroAnt extension enabled.',
             '2. Settings → Agent Bridge is switched ON and shows status "Connected".',
             '3. Auth Token matches Settings → Agent Bridge.',
           ].join('\n'),
@@ -48,9 +48,9 @@ function formatBridgeError(err: unknown, port: number) {
   };
 }
 
-export function createNanobrowserMcpServer(hub: BridgeHub, port: number): McpServer {
+export function createBroantMcpServer(hub: BridgeHub, port: number): McpServer {
   const server = new McpServer({
-    name: 'nanobrowser-mcp',
+    name: 'broant-mcp',
     version: '0.1.0',
   });
 
@@ -432,3 +432,6 @@ export function createNanobrowserMcpServer(hub: BridgeHub, port: number): McpSer
 
   return server;
 }
+
+/** Backward compatibility alias */
+export const createNanobrowserMcpServer = createBroantMcpServer;

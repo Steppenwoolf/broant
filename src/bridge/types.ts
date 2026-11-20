@@ -10,7 +10,7 @@ export interface BridgeConfig {
 export const DEFAULT_BRIDGE_CONFIG: BridgeConfig = {
   enabled: true,
   serverUrl: 'ws://127.0.0.1:8765',
-  authToken: 'nanobrowser-secret-key',
+  authToken: 'broant-secret-key',
   allowedDomains: ['*'],
 };
 

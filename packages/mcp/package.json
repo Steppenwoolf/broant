@@ -1,10 +1,11 @@
 {
-  "name": "nanobrowser-mcp",
+  "name": "broant-mcp",
   "version": "0.1.0",
-  "description": "Native Model Context Protocol (MCP) server bridging AI clients to Nanobrowser Chrome extension",
+  "description": "Native Model Context Protocol (MCP) server bridging AI clients to BroAnt Chrome extension",
   "type": "module",
   "license": "Apache-2.0",
   "bin": {
+    "broant-mcp": "./dist/cli.js",
     "nanobrowser-mcp": "./dist/cli.js"
   },
   "files": [

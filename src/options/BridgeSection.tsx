@@ -33,11 +33,11 @@ export function BridgeSection() {
   const handleCopyMcpConfig = () => {
     const config = {
       mcpServers: {
-        nanobrowser: {
+        broant: {
           command: 'npx',
-          args: ['-y', 'nanobrowser-mcp'],
+          args: ['-y', 'broant-mcp'],
           env: {
-            NANOBROWSER_BRIDGE_TOKEN: settings.bridgeAuthToken,
+            BROANT_BRIDGE_TOKEN: settings.bridgeAuthToken,
           },
         },
       },

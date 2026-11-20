@@ -1,7 +1,7 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { BridgeHub } from './bridge-hub.js';
 import { logStderr, resolveAuthToken, type BridgeConfig } from './protocol.js';
-import { createNanobrowserMcpServer } from './server.js';
+import { createBroantMcpServer } from './server.js';
 
 function parseArgs(args: string[]) {
   const result = {
@@ -45,22 +45,23 @@ function parseArgs(args: string[]) {
 function printHelp(): void {
   // strictly console.error so stdout stays clean if accidentally piped to MCP client
   console.error(`
-Nanobrowser MCP Server (nanobrowser-mcp)
+BroAnt MCP Server (broant-mcp)
 
 Usage:
-  nanobrowser-mcp [options]
-  npx nanobrowser-mcp [options]
+  broant-mcp [options]
+  npx broant-mcp [options]
 
 Options:
   -p, --port <number>      Bridge WebSocket port (default: 8765)
-  -t, --token <string>     Shared auth token (default: env NANOBROWSER_BRIDGE_TOKEN or ~/.nanobrowser/bridge.token)
+  -t, --token <string>     Shared auth token (default: env BROANT_BRIDGE_TOKEN or ~/.broant/bridge.token)
   --host <string>          Host interface to bind to (default: 127.0.0.1)
   --grace-ms <number>      Connection grace wait time in ms (default: 3000)
   -h, --help               Show this help message
 
 Environment variables:
-  NANOBROWSER_BRIDGE_TOKEN Bridge authentication token
-  NANOBROWSER_BRIDGE_PORT  Bridge port override
+  BROANT_BRIDGE_TOKEN      Bridge authentication token
+  BROANT_BRIDGE_PORT       Bridge port override
+  NANOBROWSER_BRIDGE_TOKEN Fallback legacy authentication token
 `);
 }
 
@@ -72,8 +73,9 @@ async function main() {
     process.exit(0);
   }
 
-  if (process.env.NANOBROWSER_BRIDGE_PORT) {
-    const envPort = parseInt(process.env.NANOBROWSER_BRIDGE_PORT, 10);
+  const envPortStr = process.env.BROANT_BRIDGE_PORT || process.env.NANOBROWSER_BRIDGE_PORT;
+  if (envPortStr) {
+    const envPort = parseInt(envPortStr, 10);
     if (!Number.isNaN(envPort)) parsed.port = envPort;
   }
 
@@ -86,7 +88,7 @@ async function main() {
     connectGraceMs: parsed.graceMs,
   };
 
-  logStderr('INFO', `Initializing nanobrowser-mcp on ${config.host}:${config.port}...`);
+  logStderr('INFO', `Initializing broant-mcp on ${config.host}:${config.port}...`);
 
   const hub = new BridgeHub(config);
 
@@ -112,11 +114,11 @@ async function main() {
     await hub.start();
     logStderr('INFO', `Bridge Hub started in [${hub.currentMode}] mode`);
 
-    const server = createNanobrowserMcpServer(hub, config.port);
+    const server = createBroantMcpServer(hub, config.port);
     const transport = new StdioServerTransport();
 
     await server.connect(transport);
-    logStderr('INFO', 'Nanobrowser MCP server connected to stdio transport and ready');
+    logStderr('INFO', 'BroAnt MCP server connected to stdio transport and ready');
   } catch (err) {
     logStderr('ERROR', `Fatal startup error: ${err instanceof Error ? err.stack || err.message : String(err)}`);
     await hub.shutdown();
@@ -125,6 +127,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('[nanobrowser-mcp] Uncaught top-level error:', err);
+  console.error('[broant-mcp] Uncaught top-level error:', err);
   process.exit(1);
 });

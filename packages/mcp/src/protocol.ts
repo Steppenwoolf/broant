@@ -108,22 +108,25 @@ export function safeTokenEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
-const DEFAULT_DEV_TOKEN = 'nanobrowser-secret-key';
+const DEFAULT_DEV_TOKEN = 'broant-secret-key';
 
-/** Resolve token: CLI --token > env NANOBROWSER_BRIDGE_TOKEN > ~/.nanobrowser/bridge.token > fallback */
+/** Resolve token: CLI --token > env BROANT_BRIDGE_TOKEN (or NANOBROWSER_BRIDGE_TOKEN) > ~/.broant/bridge.token > fallback */
 export function resolveAuthToken(cliToken?: string): string {
   if (cliToken?.trim()) return cliToken.trim();
-  if (process.env.NANOBROWSER_BRIDGE_TOKEN?.trim()) {
-    return process.env.NANOBROWSER_BRIDGE_TOKEN.trim();
-  }
-  const tokenFile = path.join(os.homedir(), '.nanobrowser', 'bridge.token');
-  try {
-    if (fs.existsSync(tokenFile)) {
-      const fromFile = fs.readFileSync(tokenFile, 'utf8').trim();
-      if (fromFile) return fromFile;
+  const envToken = process.env.BROANT_BRIDGE_TOKEN?.trim() || process.env.NANOBROWSER_BRIDGE_TOKEN?.trim();
+  if (envToken) return envToken;
+
+  const candidateDirs = ['.broant', '.nanobrowser'];
+  for (const dir of candidateDirs) {
+    const tokenFile = path.join(os.homedir(), dir, 'bridge.token');
+    try {
+      if (fs.existsSync(tokenFile)) {
+        const fromFile = fs.readFileSync(tokenFile, 'utf8').trim();
+        if (fromFile) return fromFile;
+      }
+    } catch {
+      // Ignore read error
     }
-  } catch {
-    // Ignore read error
   }
   return DEFAULT_DEV_TOKEN;
 }
@@ -131,5 +134,5 @@ export function resolveAuthToken(cliToken?: string): string {
 /** Logging strictly to stderr (stdout is reserved for JSON-RPC MCP frames) */
 export function logStderr(level: 'INFO' | 'WARN' | 'ERROR', msg: string, meta?: unknown): void {
   const suffix = meta !== undefined ? ` ${JSON.stringify(meta)}` : '';
-  console.error(`[nanobrowser-mcp] [${level}] ${msg}${suffix}`);
+  console.error(`[broant-mcp] [${level}] ${msg}${suffix}`);
 }

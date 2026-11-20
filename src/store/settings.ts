@@ -68,7 +68,7 @@ export const DEFAULT_SETTINGS: Settings = {
   preferLoadedModel: true,
   bridgeEnabled: true,
   bridgeServerUrl: 'ws://127.0.0.1:8765',
-  bridgeAuthToken: 'nanobrowser-secret-key',
+  bridgeAuthToken: 'broant-secret-key',
 };
 
 /** Stored settings over the defaults, so a field added later has its default. */

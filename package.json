@@ -1,8 +1,8 @@
 {
-  "name": "nanobrowser",
+  "name": "broant",
   "version": "0.3.0",
   "private": true,
-  "description": "AI web automation Chrome extension",
+  "description": "BroAnt — Hardworking AI Browser Worker & MCP Bridge",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
