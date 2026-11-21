@@ -77,6 +77,8 @@ export const ReadArgsSchema = z.strictObject({
   format: z.enum(['markdown', 'text']).default('markdown'),
   maxChars: z.number().int().min(100).max(200_000).optional(),
   offset: z.number().int().min(0).optional().describe('Character offset to continue from'),
+  position: z.enum(['top', 'viewport', 'bottom']).default('top').optional().describe('Reading position on page'),
+  find: z.string().optional().describe('Search term for reading surrounding context window'),
 });
 
 export const ScreenshotArgsSchema = z.strictObject({

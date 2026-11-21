@@ -29,6 +29,7 @@ describe('BridgeDispatcher Direct Tool RPC', () => {
     sent = [];
     client = {
       onMessage: vi.fn(),
+      onDisconnect: vi.fn(),
       send: vi.fn((msg: BridgeOutboundMessage) => sent.push(msg)),
     } as unknown as BridgeClient;
 
@@ -216,5 +217,83 @@ describe('BridgeDispatcher Direct Tool RPC', () => {
       expect(resp.error?.code).toBe('ELEMENT_NOT_FOUND');
       expect(resp.error?.retryable).toBe(true);
     }
+  });
+
+  it('handles get_status with active_only flag', async () => {
+    vi.stubGlobal('chrome', {
+      ...mockChrome,
+      tabs: {
+        ...mockChrome.tabs,
+        query: vi.fn(async (queryInfo: { active?: boolean; lastFocusedWindow?: boolean }) => {
+          if (queryInfo.active && queryInfo.lastFocusedWindow) {
+            return [{ id: 42, url: 'https://gemini.google.com/app', title: 'Gemini Chat', active: true }];
+          }
+          return [];
+        }),
+      },
+    });
+
+    await dispatcher.dispatch({
+      type: 'get_status',
+      request_id: 'req-active-only',
+      active_only: true,
+    });
+
+    expect(sent.length).toBe(1);
+    const resp = sent[0];
+    expect(resp.type).toBe('status_result');
+    if (resp.type === 'status_result') {
+      expect(resp.open_tabs.length).toBe(1);
+      expect(resp.open_tabs[0].id).toBe(42);
+      expect(resp.open_tabs[0].title).toBe('Gemini Chat');
+    }
+  });
+
+  it('handles get_status with query and domain filtering', async () => {
+    vi.stubGlobal('chrome', {
+      ...mockChrome,
+      tabs: {
+        ...mockChrome.tabs,
+        query: vi.fn(async () => [
+          { id: 1, url: 'https://github.com/repo', title: 'GitHub Repo', active: false, lastAccessed: 100 },
+          { id: 2, url: 'https://gemini.google.com/app', title: 'Gemini Chat', active: true, lastAccessed: 500 },
+          { id: 3, url: 'https://gemini.google.com/other', title: 'Gemini Old', active: false, lastAccessed: 200 },
+        ]),
+      },
+    });
+
+    await dispatcher.dispatch({
+      type: 'get_status',
+      request_id: 'req-filter',
+      domain: 'gemini.google.com',
+      query: 'Chat',
+      limit: 10,
+    });
+
+    expect(sent.length).toBe(1);
+    const resp = sent[0];
+    expect(resp.type).toBe('status_result');
+    if (resp.type === 'status_result') {
+      expect(resp.open_tabs.length).toBe(1);
+      expect(resp.open_tabs[0].id).toBe(2);
+    }
+  });
+
+  it('closes tool sessions on client disconnect', async () => {
+    let disconnectCb: (() => void) | undefined;
+    const testClient = {
+      onMessage: vi.fn(),
+      onDisconnect: vi.fn((cb: () => void) => {
+        disconnectCb = cb;
+      }),
+      send: vi.fn(),
+    } as unknown as BridgeClient;
+
+    const testDispatcher = new BridgeDispatcher(testClient, runManager);
+    const closeSpy = vi.spyOn(testDispatcher.getToolSessions(), 'close');
+
+    expect(disconnectCb).toBeDefined();
+    disconnectCb?.();
+    expect(closeSpy).toHaveBeenCalled();
   });
 });

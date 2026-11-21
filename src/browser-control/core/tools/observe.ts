@@ -211,7 +211,9 @@ export async function read(
   args: ReadArgs,
 ): Promise<ToolOutcome<{ content: string; offset: number; remaining: number }>> {
   const tab = ctx.tab();
-  const observation = await recentObservation(ctx);
+  const position = args.position ?? 'top';
+  const observation =
+    position === 'viewport' ? await observeTab(ctx, { window: 'viewport' }) : await recentObservation(ctx);
   let roots = observation.tree;
   if (args.ref) {
     const record = lookupRef(ctx.controller.registry, ctx.session.known, args.ref, tab.tabId);
@@ -220,13 +222,47 @@ export async function read(
     roots = [node];
   }
   const content = renderContent(roots, args.format ?? 'markdown');
-  const offset = args.offset ?? 0;
-  const { text, remaining } = sliceContent(content, offset, args.maxChars ?? 20_000);
+  const maxChars = args.maxChars ?? 20_000;
+  let text = '';
+  let offset = args.offset ?? 0;
+  let remaining = 0;
+  let modeDesc: string = position;
+
+  if (args.find) {
+    modeDesc = `find("${args.find}")`;
+    const needle = args.find.toLowerCase();
+    const idx = content.toLowerCase().indexOf(needle);
+    if (idx === -1) {
+      text = `[No match found for query "${args.find}" on page]`;
+      offset = 0;
+      remaining = 0;
+    } else {
+      const half = Math.floor(maxChars / 2);
+      const start = Math.max(0, idx - half);
+      const end = Math.min(content.length, start + maxChars);
+      offset = start;
+      text = content.slice(start, end);
+      remaining = Math.max(0, content.length - end);
+    }
+  } else if (position === 'bottom') {
+    modeDesc = 'bottom';
+    offset = Math.max(0, content.length - maxChars);
+    text = content.slice(offset);
+    remaining = 0;
+  } else {
+    // 'top' or 'viewport'
+    const sliced = sliceContent(content, offset, maxChars);
+    text = sliced.text;
+    remaining = sliced.remaining;
+  }
+
+  const navHeader = `[chars ${offset}..${offset + text.length} of ${content.length} | remaining: ${remaining} | mode: ${modeDesc}]`;
+  const formattedContent = `${navHeader}\n\n${text}`;
   const notices = remaining ? [`… ${remaining} more characters; continue with offset ${offset + text.length}.`] : [];
   return {
-    data: { content: text, offset, remaining },
-    lines: [`read · tab ${tab.tabId} · ${quote(observation.title)} · ${text.length} characters`],
-    pageText: text,
+    data: { content: formattedContent, offset, remaining },
+    lines: [`read · tab ${tab.tabId} · ${quote(observation.title)} · ${text.length} characters (${modeDesc})`],
+    pageText: formattedContent,
     notices,
   };
 }

@@ -103,8 +103,12 @@ export type BridgeInboundMessage =
     }
   | {
       type: 'get_status';
-      auth_token: string;
+      auth_token?: string;
       request_id: string;
+      active_only?: boolean;
+      query?: string;
+      domain?: string;
+      limit?: number;
     }
   | CallToolRequest
   | CloseToolSessionRequest;

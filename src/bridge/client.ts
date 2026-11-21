@@ -21,6 +21,7 @@ export class BridgeClient {
   private config: BridgeConfig = DEFAULT_BRIDGE_CONFIG;
   private keepAlive: KeepAliveManager;
   private messageHandlers: Set<MessageHandler> = new Set();
+  private disconnectHandlers: Set<() => void> = new Set();
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private isConnecting = false;
@@ -75,6 +76,22 @@ export class BridgeClient {
       this.ws = null;
     }
     void bridgeConnectedStorage.set(false);
+    this.notifyDisconnect();
+  }
+
+  onDisconnect(handler: () => void) {
+    this.disconnectHandlers.add(handler);
+    return () => this.disconnectHandlers.delete(handler);
+  }
+
+  private notifyDisconnect() {
+    for (const handler of this.disconnectHandlers) {
+      try {
+        handler();
+      } catch (e) {
+        console.warn('[bridge] Error in onDisconnect handler:', e);
+      }
+    }
   }
 
   onMessage(handler: MessageHandler) {
@@ -135,6 +152,7 @@ export class BridgeClient {
         this.keepAlive.stopHeartbeat();
         this.ws = null;
         void bridgeConnectedStorage.set(false);
+        this.notifyDisconnect();
         this.scheduleReconnect();
       };
 

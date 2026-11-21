@@ -152,13 +152,28 @@ export function createBroantMcpServer(hub: BridgeHub, port: number): McpServer {
   // 1. List tabs
   server.tool(
     'browser_list_tabs',
-    'List open Chrome tabs and active browser control sessions.',
-    {},
-    async () => {
+    'List open Chrome tabs and active browser control sessions. Supports active_only for fast ~10ms active tab lookup, and query/domain filtering with lastAccessed sorting.',
+    {
+      active_only: z
+        .boolean()
+        .optional()
+        .describe('Return only the current active tab immediately (~10ms) without querying all tabs'),
+      query: z.string().optional().describe('Search keyword in tab title or URL'),
+      domain: z.string().optional().describe('Filter tabs by hostname / domain (e.g. "gemini.google.com")'),
+      limit: z.number().int().min(1).max(100).default(20).describe('Max tabs to return (sorted by most recently accessed)'),
+    },
+    async ({ active_only, query, domain, limit }) => {
       const requestId = crypto.randomUUID();
       try {
         const res = await hub.sendCommand<BridgeStatusResult>(
-          { type: 'get_status', request_id: requestId },
+          {
+            type: 'get_status',
+            request_id: requestId,
+            active_only,
+            query,
+            domain,
+            limit,
+          },
           { correlationId: requestId, expectTerminal: 'status_result', timeoutMs: 10_000 },
         );
         return {
@@ -275,20 +290,37 @@ export function createBroantMcpServer(hub: BridgeHub, port: number): McpServer {
   // 6. Read
   server.tool(
     'browser_read',
-    'Extract clean readable text from the current page or a specific element ref.',
+    'Extract clean readable text from the current page or a specific element ref. Supports cursor modes: top, viewport, bottom, find, and ephemeral one-shot read.',
     {
       session_id: z.string().optional().describe('Session ID (defaults to last active session)'),
       ref: z.string().optional().describe('Optional container/table ref to scope extraction'),
       max_chars: z.number().int().min(500).max(100_000).default(20_000),
       offset: z.number().int().min(0).default(0).describe('Character offset to continue reading from'),
+      position: z
+        .enum(['top', 'viewport', 'bottom'])
+        .default('top')
+        .describe('Reading cursor position: top (from start/offset), viewport (visible on screen), bottom (tail of chat/logs)'),
+      find: z.string().optional().describe('Search query to locate text on page and read surrounding context window'),
+      ephemeral: z
+        .boolean()
+        .default(false)
+        .describe('If true, releases the tab session immediately after reading (no border/lock retained)'),
     },
-    async ({ session_id, ref, max_chars, offset }) =>
-      invokeDirectTool({
+    async ({ session_id, ref, max_chars, offset, position, find, ephemeral }) => {
+      const result = await invokeDirectTool({
         tool: 'text',
-        args: { ref, maxChars: max_chars, offset },
+        args: { ref, maxChars: max_chars, offset, position, find, ephemeral },
         sessionId: session_id,
         wrapOutput: true,
-      }),
+      });
+      if (ephemeral) {
+        const targetSessionId = session_id || hub.defaultSessionId;
+        if (targetSessionId) {
+          hub.forgetSession(targetSessionId);
+        }
+      }
+      return result;
+    },
   );
 
   // 7. Close session

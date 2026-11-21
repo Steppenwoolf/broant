@@ -64,6 +64,11 @@ export class BridgeDispatcher {
 
   constructor(private client: BridgeClient, private runManager: RunManager) {
     this.client.onMessage(msg => void this.dispatch(msg));
+    if (typeof this.client.onDisconnect === 'function') {
+      this.client.onDisconnect(() => {
+        void this.toolSessions.close();
+      });
+    }
   }
 
   getToolSessions(): BridgeToolSessionManager {
@@ -72,7 +77,45 @@ export class BridgeDispatcher {
 
   async dispatch(msg: BridgeInboundMessage) {
     if (msg.type === 'get_status') {
-      const tabs = await (typeof chrome !== 'undefined' && chrome.tabs ? chrome.tabs.query({}) : Promise.resolve([]));
+      let tabs: chrome.tabs.Tab[] = [];
+      if (typeof chrome !== 'undefined' && chrome.tabs) {
+        if (msg.active_only) {
+          const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+          if (activeTab) {
+            tabs = [activeTab];
+          } else {
+            const [fallbackActive] = await chrome.tabs.query({ active: true });
+            tabs = fallbackActive ? [fallbackActive] : [];
+          }
+        } else {
+          tabs = await chrome.tabs.query({});
+          if (msg.domain) {
+            const domainLower = msg.domain.toLowerCase();
+            tabs = tabs.filter(t => {
+              if (!t.url) return false;
+              try {
+                return new URL(t.url).hostname.toLowerCase().includes(domainLower);
+              } catch {
+                return t.url.toLowerCase().includes(domainLower);
+              }
+            });
+          }
+          if (msg.query) {
+            const q = msg.query.toLowerCase();
+            tabs = tabs.filter(
+              t => (t.title && t.title.toLowerCase().includes(q)) || (t.url && t.url.toLowerCase().includes(q)),
+            );
+          }
+          tabs.sort(
+            (a, b) =>
+              ((b as { lastAccessed?: number }).lastAccessed ?? 0) -
+              ((a as { lastAccessed?: number }).lastAccessed ?? 0),
+          );
+          if (msg.limit && msg.limit > 0) {
+            tabs = tabs.slice(0, msg.limit);
+          }
+        }
+      }
       this.client.send({
         type: 'status_result',
         request_id: msg.request_id,
@@ -149,6 +192,7 @@ export class BridgeDispatcher {
     const abortController = new AbortController();
     const timer = setTimeout(() => abortController.abort(), timeoutMs);
 
+    const isEphemeral = Boolean(msg.args?.ephemeral);
     let currentSessionId = msg.session_id ?? '';
     let currentTabId = -1;
 
@@ -163,6 +207,7 @@ export class BridgeDispatcher {
       if (resolvedTool === 'snapshot' && msg.pruning) {
         resolvedArgs.pruning = msg.pruning;
       }
+      delete resolvedArgs.ephemeral;
 
       const result = await Promise.race([
         this.toolSessions.runExclusive(managed, s =>
@@ -210,6 +255,10 @@ export class BridgeDispatcher {
         },
         duration_ms: Date.now() - startTime,
       });
+    } finally {
+      if (isEphemeral && currentSessionId) {
+        void this.toolSessions.close(currentSessionId);
+      }
     }
   }
 
