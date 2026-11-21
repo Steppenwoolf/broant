@@ -10,6 +10,11 @@ export function openPanel(tabId: number, path: string = PANEL_PATH): void {
   chrome.sidePanel.open({ tabId }).catch(error => console.warn('[panel] open failed', error));
 }
 
+/** Closes the panel on a tab by disabling it. */
+export function closePanel(tabId: number): void {
+  void chrome.sidePanel.setOptions({ tabId, enabled: false }).catch(error => console.warn('[panel] close failed', error));
+}
+
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => undefined);
 
 chrome.action.onClicked.addListener(tab => {

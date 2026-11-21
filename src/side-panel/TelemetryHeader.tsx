@@ -7,6 +7,7 @@ import { HistoryIcon, LogoMark, MoonIcon, NewChatIcon, SettingsIcon, SunIcon } f
 import { websiteUrl } from '@src/ui/links';
 import { t } from '@src/ui/i18n';
 import { applyTheme } from '@src/ui/theme';
+import { useStorage } from '@src/ui/hooks';
 import { bridgeConnectedStorage } from '@src/store/settings';
 import { bridgeActivityStore, type BridgeActivityState } from '@src/store/bridge-activity';
 
@@ -57,7 +58,7 @@ export function TelemetryHeader({
   const [isDark, setIsDark] = useState<boolean>(() => {
     return document.documentElement.classList.contains('dark');
   });
-  const [bridgeConnected, setBridgeConnected] = useState<boolean>(false);
+  const bridgeConnected = useStorage(bridgeConnectedStorage, false);
   const [activity, setActivity] = useState<BridgeActivityState>(() => bridgeActivityStore.get());
 
   useEffect(() => {
@@ -69,11 +70,8 @@ export function TelemetryHeader({
   }, []);
 
   useEffect(() => {
-    void bridgeConnectedStorage.get().then(setBridgeConnected);
-    const unwatch = bridgeConnectedStorage.watch(setBridgeConnected);
     const unsubActivity = bridgeActivityStore.subscribe(setActivity);
     return () => {
-      unwatch();
       unsubActivity();
     };
   }, []);

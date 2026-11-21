@@ -3,6 +3,7 @@ import { bridgeActivityStore } from '@src/store/bridge-activity';
 import { DEFAULT_SETTINGS, bridgeConnectedStorage, settingsStorage } from '@src/store/settings';
 import type { BridgeDispatcher } from '@src/bridge/dispatcher';
 import { PANEL_PORT_NAME } from '@src/ui/protocol';
+import { openPanel, closePanel } from './panel';
 
 export function initRailHub(getDispatcher: () => BridgeDispatcher | null) {
   const ports = new Set<chrome.runtime.Port>();
@@ -13,7 +14,7 @@ export function initRailHub(getDispatcher: () => BridgeDispatcher | null) {
     if (typeof chrome !== 'undefined' && chrome.runtime?.getContexts) {
       try {
         const contexts = await chrome.runtime.getContexts({
-          contextTypes: [chrome.runtime.ContextType.SIDE_PANEL],
+          contextTypes: ['SIDE_PANEL' as any],
         });
         return contexts.length > 0;
       } catch {
@@ -98,9 +99,21 @@ export function initRailHub(getDispatcher: () => BridgeDispatcher | null) {
       const action = msg.action as string;
 
       if (action === 'open_sidepanel' || action === 'open_routines') {
+        const tabId = sender.tab?.id;
         const windowId = sender.tab?.windowId;
-        if (windowId !== undefined && chrome.sidePanel?.open) {
+        if (tabId !== undefined) {
+          openPanel(tabId);
+        } else if (windowId !== undefined && chrome.sidePanel?.open) {
           void chrome.sidePanel.open({ windowId }).catch(() => undefined);
+        }
+        sendResponse({ ok: true });
+        return false;
+      }
+
+      if (action === 'close_sidepanel') {
+        const tabId = sender.tab?.id;
+        if (tabId !== undefined) {
+          closePanel(tabId);
         }
         sendResponse({ ok: true });
         return false;
