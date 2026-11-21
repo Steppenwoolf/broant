@@ -28,7 +28,7 @@ export default defineConfig({
     host_permissions: ['<all_urls>'],
     ...permissionLists(productPermissions ? 'product' : 'autorun'),
     action: { default_icon: 'icon-32.png', default_title: '__MSG_actionTitle__' },
-    icons: { 128: 'icon-128.png' },
+    icons: { 16: 'icon-16.png', 32: 'icon-32.png', 48: 'icon-48.png', 128: 'icon-128.png' },
     commands: {
       'open-panel': { suggested_key: { default: 'Alt+Shift+B' }, description: '__MSG_commandOpenPanel__' },
       'open-test-panel': { description: 'Open the browser control test panel (developers)' },

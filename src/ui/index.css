@@ -3,38 +3,37 @@
 @tailwind utilities;
 
 /*
- * The brand (the Nanobrowser brandbook). Primary #0073DC and sky #19C2FF on a pale sky canvas in light; a deep navy
- * canvas in dark. Text colours meet WCAG AA on the canvas, the surfaces and the cards. Fonts are the system's: sans for
- * the interface, and the system's serif for answers, as in Claude in Chrome's side panel.
+ * The BroAnt brand palette: Electric Cyan (#06B6D4) and Indigo (#6366F1) on an Obsidian Navy canvas (#0B1120) in dark;
+ * Slate canvas in light with Amber (#F59E0B) worker accents.
  */
 :root {
-  --nb-canvas: 250 251 253;
+  --nb-canvas: 250 250 252;
   --nb-bg: 255 255 255;
-  --nb-fg: 15 27 45;
-  --nb-muted: 91 107 130;
-  --nb-border: 214 227 240;
-  --nb-surface: 234 244 252;
-  --nb-accent: 0 115 220;
-  --nb-accent-strong: 0 95 184;
-  --nb-sky: 25 194 255;
-  --nb-link: 0 104 201;
-  --nb-auto: 180 83 9;
-  --nb-shadow: 30 70 150;
+  --nb-fg: 15 23 42;
+  --nb-muted: 100 116 139;
+  --nb-border: 226 232 240;
+  --nb-surface: 241 245 249;
+  --nb-accent: 6 182 212;
+  --nb-accent-strong: 8 145 178;
+  --nb-sky: 99 102 241;
+  --nb-link: 14 165 233;
+  --nb-auto: 217 119 6;
+  --nb-shadow: 15 23 42;
   color-scheme: light;
 }
 
 .dark {
-  --nb-canvas: 10 18 32;
-  --nb-bg: 17 29 50;
-  --nb-fg: 238 244 255;
-  --nb-muted: 148 166 192;
-  --nb-border: 40 58 88;
-  --nb-surface: 26 42 69;
-  --nb-accent: 0 115 220;
-  --nb-accent-strong: 26 132 232;
-  --nb-sky: 25 194 255;
-  --nb-link: 92 176 255;
-  --nb-auto: 251 191 36;
+  --nb-canvas: 11 17 32;
+  --nb-bg: 17 24 39;
+  --nb-fg: 248 250 252;
+  --nb-muted: 148 163 184;
+  --nb-border: 30 41 59;
+  --nb-surface: 24 33 47;
+  --nb-accent: 6 182 212;
+  --nb-accent-strong: 14 165 233;
+  --nb-sky: 99 102 241;
+  --nb-link: 56 189 248;
+  --nb-auto: 245 158 11;
   --nb-shadow: 0 8 24;
   color-scheme: dark;
 }
