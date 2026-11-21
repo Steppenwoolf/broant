@@ -8,7 +8,7 @@ import type { ReasoningEffort, ReasoningSupport } from '../llm/catalogue';
 import { createStorage } from './storage';
 import type { LivePair, ModelRef, PermissionMode } from './types';
 
-export type UiLanguage = 'auto' | 'en' | 'zh_CN' | 'zh_TW';
+export type UiLanguage = 'auto' | 'en';
 export type Theme = 'system' | 'light' | 'dark';
 
 export interface Settings {

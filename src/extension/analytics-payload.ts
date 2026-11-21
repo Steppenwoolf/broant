@@ -18,7 +18,7 @@ export const PROVIDER_KINDS: readonly ProviderKind[] = [
   'bedrock',
 ];
 export const BROWSERS = ['chrome', 'edge', 'other'] as const;
-export const LANGUAGES = ['en', 'zh_CN', 'zh_TW'] as const;
+export const LANGUAGES = ['en'] as const;
 export const TOOL_NAMES: readonly string[] = allTools().map(t => t.name);
 export const ROW_IDS: readonly string[] = [...rows.map(r => r.id), 'unknown'];
 

@@ -24,10 +24,13 @@ describe('first run', () => {
     });
   });
 
-  it("writes it in the browser's language", async () => {
-    vi.stubGlobal('navigator', { language: 'zh-CN' });
+  it("writes it in English regardless of non-supported browser locale", async () => {
+    vi.stubGlobal('navigator', { language: 'de-DE' });
     await addFirstShortcuts();
     const [only] = await listShortcuts();
-    expect(only).toMatchObject({ description: '总结这个页面', text: '用几个要点总结这个页面。' });
+    expect(only).toMatchObject({
+      description: 'Summarize this page',
+      text: 'Summarize this page in a few bullet points.',
+    });
   });
 });

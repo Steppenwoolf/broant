@@ -121,7 +121,7 @@ export class BridgeDispatcher {
       const newTab = await chrome.tabs.create({ url: 'about:blank' });
       if (newTab.id) return newTab.id;
     }
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (activeTab?.id) return activeTab.id;
     const [anyTab] = await chrome.tabs.query({});
     if (anyTab?.id) return anyTab.id;

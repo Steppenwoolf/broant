@@ -4,8 +4,6 @@ import type { UiLanguage } from '@src/store/settings';
 
 export const LANGUAGE_NAMES: Record<Exclude<UiLanguage, 'auto'>, string> = {
   en: 'English',
-  zh_CN: '简体中文',
-  zh_TW: '繁體中文',
 };
 
 /**

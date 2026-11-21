@@ -41,8 +41,8 @@ const NO_KEYS: Record<string, string> = {};
 
 /** The starters a new conversation offers when no shortcut is pinned: a short label and the text it sends. */
 const STARTERS = [
-  { label: 'panel.starter.star', text: 'panel.starter.starText' },
   { label: 'panel.starter.summarize', text: 'panel.starter.summarizeText' },
+  { label: 'panel.starter.translate', text: 'panel.starter.translateText' },
   { label: 'panel.starter.news', text: 'panel.starter.newsText' },
 ] as const;
 

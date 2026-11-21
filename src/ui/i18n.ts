@@ -4,37 +4,29 @@ import { useSyncExternalStore } from 'react';
 import en from './locales/en.json';
 
 export type MessageKey = keyof typeof en;
-export type Language = 'en' | 'zh_CN' | 'zh_TW';
+export type Language = 'en';
 type Catalogue = Partial<Record<MessageKey, string>>;
 
-/** Catalogues other than English, loaded when chosen. Adding a language is a JSON file and a line here. */
-export const LOADERS: Partial<Record<Language, () => Promise<{ default: Catalogue }>>> = {
-  zh_CN: () => import('./locales/zh_CN.json'),
-  zh_TW: () => import('./locales/zh_TW.json'),
-};
+/** Catalogues other than English, loaded when chosen. */
+export const LOADERS: Partial<Record<Language, () => Promise<{ default: Catalogue }>>> = {};
 
 let language: Language = 'en';
 let catalogue: Catalogue = en;
 const listeners = new Set<() => void>();
 
-/** The language for the "auto" setting: the browser's. */
+/** The language for the "auto" setting: English. */
 export function browserLanguage(tag: string = globalThis.navigator?.language ?? 'en'): Language {
-  const lower = tag.toLowerCase();
-  if (lower.startsWith('zh')) return /tw|hk|mo|hant/.test(lower) ? 'zh_TW' : 'zh_CN';
   return 'en';
 }
 
 export function resolveLanguage(setting: string): Language {
-  return setting === 'en' || setting === 'zh_CN' || setting === 'zh_TW' ? setting : browserLanguage();
+  return 'en';
 }
 
 export async function setLanguage(setting: string): Promise<void> {
-  const next = resolveLanguage(setting);
-  const loader = LOADERS[next];
-  const loaded: Catalogue = loader ? (await loader()).default : en;
-  language = loader ? next : 'en';
-  catalogue = loaded;
-  if (typeof document !== 'undefined') document.documentElement.lang = language.replace('_', '-');
+  language = 'en';
+  catalogue = en;
+  if (typeof document !== 'undefined') document.documentElement.lang = 'en';
   listeners.forEach(l => l());
 }
 
