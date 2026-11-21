@@ -12,7 +12,7 @@ export interface ManagedToolSession {
   busy: boolean;
 }
 
-const DEFAULT_IDLE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_IDLE_TTL_MS = 60 * 1000; // 1 minute (auto-release sticky lock after inactivity)
 
 export class BridgeToolSessionManager {
   private sessions = new Map<string, ManagedToolSession>();
@@ -30,7 +30,7 @@ export class BridgeToolSessionManager {
         if (sid) void this.close(sid);
       });
     }
-    this.gcTimer = setInterval(() => void this.evictExpired(), 60_000);
+    this.gcTimer = setInterval(() => void this.evictExpired(), 10_000);
   }
 
   private async getController(): Promise<Controller> {
@@ -110,7 +110,16 @@ export class BridgeToolSessionManager {
     }
   }
 
-  async close(sessionId: string): Promise<boolean> {
+  async close(sessionId?: string): Promise<boolean> {
+    if (!sessionId) {
+      const all = Array.from(this.sessions.keys());
+      if (!all.length) return false;
+      let closedAny = false;
+      for (const sid of all) {
+        if (await this.close(sid)) closedAny = true;
+      }
+      return closedAny;
+    }
     const entry = this.sessions.get(sessionId);
     if (!entry) return false;
     this.sessions.delete(sessionId);

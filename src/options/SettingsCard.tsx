@@ -15,11 +15,11 @@ export function SettingsCard({
   className?: string;
 }) {
   return (
-    <section className="rounded-xl border border-nb-border bg-nb-bg p-5 sm:px-8 sm:py-7">
+    <section className="rounded-xl border border-ba-border/80 bg-ba-surface p-5 shadow-sm transition-all hover:border-ba-border sm:px-8 sm:py-7">
       {title ? (
         <div className={`flex flex-col gap-1.5 ${children ? 'mb-6' : ''}`}>
-          <h3 className="text-xl font-semibold">{title}</h3>
-          {description ? <p className="text-[15px] leading-relaxed text-nb-muted">{description}</p> : null}
+          <h3 className="text-xl font-bold tracking-tight text-ba-fg-strong">{title}</h3>
+          {description ? <p className="text-[15px] leading-relaxed text-ba-muted">{description}</p> : null}
         </div>
       ) : null}
       {children ? <div className={className}>{children}</div> : null}

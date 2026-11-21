@@ -213,19 +213,43 @@ export const SlantedPinIcon = (p: IconProps) => (
   </Svg>
 );
 
+/** Sun icon for light theme */
+export const SunIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+  </Svg>
+);
+
+/** Moon icon for dark theme */
+export const MoonIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+  </Svg>
+);
+
 export function LogoMark({ size = 20, className = '' }: { size?: number; className?: string }) {
   return <img src="/icon-128.png" alt="" width={size} height={size} className={`shrink-0 ${className}`} />;
 }
 
-/** The brand's horizontal logo: the mark and "BroAnt". */
+/** The brand's horizontal logo: the mark and "BroAnt" (theme-adaptive). */
 export function Logo({ height = 28, className = '' }: { height?: number; className?: string }) {
   return (
-    <img
-      src="/brand/logo-horizontal.png"
-      alt="BroAnt"
-      height={height}
-      style={{ height, width: 'auto' }}
-      className={className}
-    />
+    <span className={`inline-flex shrink-0 items-center ${className}`}>
+      <img
+        src="/brand/logo-horizontal.png"
+        alt="BroAnt"
+        height={height}
+        style={{ height, width: 'auto' }}
+        className="hidden dark:block"
+      />
+      <img
+        src="/brand/logo-horizontal-light.png"
+        alt="BroAnt"
+        height={height}
+        style={{ height, width: 'auto' }}
+        className="block dark:hidden"
+      />
+    </span>
   );
 }

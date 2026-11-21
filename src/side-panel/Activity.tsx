@@ -20,11 +20,11 @@ const PHASES: Record<Phase, MessageKey> = {
 
 const ICONS: Record<ToolRow['status'], string> = { running: '…', done: '✓', failed: '✗', skipped: '–', waiting: '!' };
 const TONES: Record<ToolRow['status'], string> = {
-  running: 'text-nb-link',
+  running: 'text-ba-accent',
   done: 'text-emerald-600 dark:text-emerald-400',
-  failed: 'text-red-600 dark:text-red-400',
-  skipped: 'text-nb-muted',
-  waiting: 'text-amber-600 dark:text-amber-400',
+  failed: 'text-ba-danger',
+  skipped: 'text-ba-muted',
+  waiting: 'text-ba-honey',
 };
 const STATUS: Partial<Record<ToolRow['status'], Parameters<typeof t>[0]>> = {
   running: 'act.running',
@@ -72,31 +72,31 @@ export function Activity({ rows, phase, start, end }: { rows: ToolRow[]; phase?:
   const time = elapsed((phase ? now : (end ?? start)) - start);
   const status = phase ? (
     <>
-      <SpinnerIcon size={14} className="text-nb-link motion-safe:animate-spin" />
-      <span>{t(PHASES[phase])}</span>
-      <span className="tabular-nums opacity-60">{time}</span>
+      <SpinnerIcon size={14} className="text-ba-accent motion-safe:animate-spin" />
+      <span className="font-medium text-ba-fg">{t(PHASES[phase])}</span>
+      <span className="tabular-nums font-mono opacity-60 text-ba-muted">{time}</span>
     </>
   ) : (
-    <span>{t('activity.worked', { time })}</span>
+    <span className="text-ba-muted">{t('activity.worked', { time })}</span>
   );
   return (
-    <div className="flex flex-col gap-1" data-role="activity">
+    <div className="flex flex-col gap-1.5" data-role="activity">
       {rows.length ? (
         <button
           type="button"
           aria-expanded={open}
-          className="flex items-center gap-1.5 self-start rounded-md py-0.5 pr-1 text-left text-nb-muted transition-colors hover:text-nb-fg"
+          className="flex items-center gap-1.5 self-start rounded-md py-0.5 pr-1 text-left text-ba-muted transition-colors hover:text-ba-fg"
           onClick={() => setOpen(o => !o)}>
           {status}
-          <ChevronIcon size={14} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+          <ChevronIcon size={14} className={`transition-transform text-ba-muted ${open ? 'rotate-90' : ''}`} />
         </button>
       ) : (
-        <div className="flex items-center gap-1.5 py-0.5 text-nb-muted">{status}</div>
+        <div className="flex items-center gap-1.5 py-0.5 text-ba-muted">{status}</div>
       )}
       {open && rows.length ? (
-        <ul className="flex flex-col gap-0.5 rounded-xl border border-nb-border bg-nb-bg px-2.5 py-1.5 text-xs shadow-sm">
-          {rows.map(row => (
-            <Row key={row.toolCallId} row={row} />
+        <ul className="relative ml-2 flex flex-col border-l-[1.5px] border-ba-border/70 pl-2 pt-1 text-xs">
+          {rows.map((row, i) => (
+            <Row key={row.toolCallId} row={row} index={i} />
           ))}
         </ul>
       ) : null}
@@ -104,44 +104,60 @@ export function Activity({ rows, phase, start, end }: { rows: ToolRow[]; phase?:
   );
 }
 
-function Row({ row }: { row: ToolRow }) {
+function Row({ row, index }: { row: ToolRow; index: number }) {
   const [open, setOpen] = useState(false);
   const line = activityLine(row);
   const status = STATUS[row.status];
   const result = row.result as { receipt?: unknown; error?: { hint?: string } } | undefined;
+  const isRunning = row.status === 'running';
+  const nodeBg =
+    isRunning
+      ? 'bg-ba-accent'
+      : row.status === 'failed'
+        ? 'bg-ba-danger'
+        : row.status === 'waiting'
+          ? 'bg-ba-honey'
+          : 'bg-emerald-500';
+
   return (
-    <li className="flex flex-col">
+    <li className="relative pl-4 pb-2.5 last:pb-0">
+      {/* Node circle on the timeline */}
+      <span
+        aria-hidden
+        className={`absolute -left-[5px] top-1.5 size-2 rounded-full ${nodeBg} ring-2 ring-ba-bg transition-transform ${isRunning ? 'animate-pulse scale-110' : ''}`}
+      />
       <button
         type="button"
         aria-expanded={open}
-        className="flex items-start gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-nb-surface"
+        className="flex w-full items-baseline gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-ba-surface"
         onClick={() => setOpen(o => !o)}>
-        <span aria-hidden className={`w-3 shrink-0 text-center font-semibold ${TONES[row.status]}`}>
-          {ICONS[row.status]}
-        </span>
-        <span className="min-w-0 flex-1 break-words">
+        <span className="font-mono text-[11px] text-ba-muted/80">{index + 1}.</span>
+        <span className="min-w-0 flex-1 break-words font-medium text-ba-fg text-[12px]">
           {line.label}
           {[...(status ? [t(status)] : []), ...line.tags].map(tag => (
-            <span key={tag} className="ml-1 rounded-full bg-nb-surface px-1.5 text-[10px] text-nb-muted">
+            <span
+              key={tag}
+              className="ml-1.5 rounded-full border border-ba-border/40 bg-ba-surface-elevated px-1.5 py-0.2 font-mono text-[10px] text-ba-muted">
               {tag}
             </span>
           ))}
         </span>
+        <ChevronIcon size={12} className={`shrink-0 text-ba-muted transition-transform ${open ? 'rotate-90' : ''}`} />
       </button>
       {row.thumbnail ? (
         <img
           src={row.thumbnail}
           alt={t('act.thumbnail')}
-          className="ml-5 mt-0.5 h-16 w-auto self-start rounded-md border border-nb-border"
+          className="ml-4 mt-1 h-16 w-auto self-start rounded-md border border-ba-border/60 shadow-sm"
         />
       ) : null}
       {line.details.map(d => (
-        <span key={d} className="ml-5 text-[11px] text-nb-muted">
+        <span key={d} className="ml-4 block text-[11px] text-ba-muted font-mono">
           {d}
         </span>
       ))}
       {open ? (
-        <div className="ml-5 flex flex-col gap-1 py-1">
+        <div className="ml-4 flex flex-col gap-1 py-1">
           {row.args !== undefined ? <Detail title={t('act.arguments')} value={maskArgs(row.args)} /> : null}
           {result?.receipt ? <Detail title={t('act.result')} value={result.receipt} /> : null}
           {result?.error?.hint ? <Detail title={t('act.hint')} value={result.error.hint} /> : null}
@@ -154,8 +170,8 @@ function Row({ row }: { row: ToolRow }) {
 function Detail({ title, value }: { title: string; value: unknown }) {
   return (
     <div>
-      <span className="text-nb-muted">{title}</span>
-      <pre className="whitespace-pre-wrap break-words rounded-md bg-nb-surface p-1.5 font-mono text-[11px]">
+      <span className="text-ba-muted font-mono text-[10px] uppercase tracking-wider">{title}</span>
+      <pre className="whitespace-pre-wrap break-words rounded-md border border-ba-border/40 bg-ba-surface-elevated p-1.5 font-mono text-[11px] text-ba-fg">
         {typeof value === 'string' ? value : JSON.stringify(value, null, 1)}
       </pre>
     </div>

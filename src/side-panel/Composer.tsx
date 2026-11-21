@@ -233,6 +233,7 @@ export function Composer({
   const [text, setText] = useState('');
   const [selected, setSelected] = useState(0);
   const [launcherClosed, setLauncherClosed] = useState(false);
+  const [domMode, setDomMode] = useState<'compact' | 'full'>('compact');
   const [recall, setRecall] = useState<number | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
@@ -472,7 +473,7 @@ export function Composer({
         />
       ) : null}
       {slash ? <Launcher items={items} selected={Math.min(selected, items.length - 1)} onPick={pick} /> : null}
-      <div className="relative flex flex-col rounded-2xl border border-nb-border bg-nb-bg shadow-soft transition-colors focus-within:border-nb-accent/60 focus-within:ring-2 focus-within:ring-nb-accent/20">
+      <div className="relative flex flex-col rounded-2xl border border-ba-border/80 bg-ba-surface shadow-soft transition-colors focus-within:border-ba-accent/60 focus-within:ring-2 focus-within:ring-ba-accent/20">
         <textarea
           ref={input}
           id="nb-composer-input"
@@ -487,7 +488,7 @@ export function Composer({
           aria-label={t('composer.placeholder')}
           placeholder={t('composer.placeholder')}
           disabled={noModel}
-          className="max-h-[min(50vh,400px)] min-h-24 w-full resize-none bg-transparent px-3.5 pb-1 pt-3 text-[15px] placeholder:text-nb-muted focus:outline-none disabled:cursor-not-allowed"
+          className="max-h-[min(50vh,400px)] min-h-24 w-full resize-none bg-transparent px-3.5 pb-1 pt-3 text-[15px] placeholder:text-ba-muted focus:outline-none disabled:cursor-not-allowed"
           onChange={e => {
             setText(e.target.value);
             setRecall(null);
@@ -617,7 +618,7 @@ export function Composer({
           />
           {onPreferLoaded !== undefined ? (
             <label
-              className="flex items-center gap-1.5 cursor-pointer select-none rounded-full px-2 py-1 text-xs text-nb-muted hover:border-nb-border hover:text-nb-fg border border-transparent"
+              className="flex items-center gap-1.5 cursor-pointer select-none rounded-full px-2 py-1 text-xs text-ba-muted hover:border-ba-border hover:text-ba-fg border border-transparent"
               title={
                 activeLoadedModelName
                   ? `${t('composer.preferLoadedTooltip')} (${activeLoadedModelName})`
@@ -627,16 +628,24 @@ export function Composer({
                 type="checkbox"
                 checked={preferLoaded}
                 onChange={e => onPreferLoaded(e.target.checked)}
-                className="size-3.5 rounded border-nb-border text-nb-accent focus:ring-nb-accent/40 accent-nb-accent cursor-pointer"
+                className="size-3.5 rounded border-ba-border text-ba-accent focus:ring-ba-accent/40 accent-ba-accent cursor-pointer"
               />
-              <span className="whitespace-nowrap">{t('composer.loaded')}</span>
+              <span className="whitespace-nowrap font-mono text-[11px]">{t('composer.loaded')}</span>
             </label>
           ) : null}
+          <button
+            type="button"
+            onClick={() => setDomMode(d => (d === 'compact' ? 'full' : 'compact'))}
+            title="DOM mode: Compact (~14k) or Full"
+            className="flex items-center gap-1 rounded-full border border-ba-border/60 bg-ba-surface px-2 py-0.5 text-[11px] font-mono text-ba-muted transition-colors hover:border-ba-border hover:text-ba-fg">
+            <span>DOM:</span>
+            <span className="font-semibold text-ba-accent">{domMode === 'compact' ? 'Compact' : 'Full'}</span>
+          </button>
           <span className="flex-1" />
           {transcribe !== undefined ? (
             <>
               {voice === 'recording' ? (
-                <span className="shrink-0 text-xs tabular-nums text-red-600 dark:text-red-300" aria-hidden="true">
+                <span className="shrink-0 text-xs tabular-nums text-ba-danger" aria-hidden="true">
                   {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
                 </span>
               ) : null}
@@ -659,10 +668,10 @@ export function Composer({
                       : 'composer.voice',
                 )}
                 disabled={noModel}
-                className={`flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent ${voice === 'recording' ? 'animate-pulse bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-300' : 'text-nb-muted hover:bg-nb-surface hover:text-nb-fg'}`}
+                className={`flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent ${voice === 'recording' ? 'animate-pulse bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-300' : 'text-ba-muted hover:bg-ba-surface hover:text-ba-fg'}`}
                 onClick={pressMic}>
                 {voice === 'transcribing' ? (
-                  <SpinnerIcon size={15} className="text-nb-link motion-safe:animate-spin" />
+                  <SpinnerIcon size={15} className="text-ba-accent motion-safe:animate-spin" />
                 ) : (
                   <MicIcon size={17} />
                 )}
@@ -672,7 +681,7 @@ export function Composer({
           {active ? (
             <button
               type="button"
-              className="flex shrink-0 items-center gap-1 rounded-full bg-red-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-red-700"
+              className="flex shrink-0 items-center gap-1 rounded-full bg-ba-danger px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:opacity-90"
               onClick={onStop}>
               <StopIcon size={13} />
               <span className="max-[279px]:sr-only">{t('composer.stop')}</span>
@@ -683,7 +692,7 @@ export function Composer({
               disabled={(!text.trim() && !files.length && !quotes.length) || !model}
               aria-label={t('composer.send')}
               title={t('composer.send')}
-              className="flex size-7 shrink-0 items-center justify-center rounded-full bg-nb-accent text-white shadow-sm transition-colors hover:bg-nb-accent-strong disabled:opacity-40 disabled:shadow-none disabled:hover:bg-nb-accent"
+              className="flex size-7 shrink-0 items-center justify-center rounded-full bg-ba-accent text-white shadow-sm transition-all hover:bg-ba-accent-hover active:scale-95 disabled:opacity-40 disabled:shadow-none disabled:hover:bg-ba-accent"
               onClick={send}>
               <SendIcon size={14} />
             </button>

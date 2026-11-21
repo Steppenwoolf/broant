@@ -1,6 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 const token = (name: string) => `rgb(var(--nb-${name}) / <alpha-value>)`;
+const baToken = (name: string) => `rgb(var(--ba-${name}) / <alpha-value>)`;
 
 export default {
   content: ['./src/**/*.{ts,tsx}', './entrypoints/**/*.html'],
@@ -8,6 +9,23 @@ export default {
   theme: {
     extend: {
       colors: {
+        // BroAnt Terracotta Forge & Sandstone & Rust Design System
+        'ba-bg': baToken('bg'),
+        'ba-surface': baToken('surface'),
+        'ba-surface-elevated': baToken('surface-elevated'),
+        'ba-fg': baToken('fg'),
+        'ba-fg-strong': baToken('fg-strong'),
+        'ba-muted': baToken('muted'),
+        'ba-accent': baToken('accent'),
+        'ba-accent-hover': baToken('accent-hover'),
+        'ba-honey': baToken('honey'),
+        'ba-signal-blue': baToken('signal-blue'),
+        'ba-border': baToken('border'),
+        'ba-border-subtle': baToken('border-subtle'),
+        'ba-success': baToken('success'),
+        'ba-danger': baToken('danger'),
+
+        // Legacy compatibility tokens
         'nb-canvas': token('canvas'),
         'nb-bg': token('bg'),
         'nb-fg': token('fg'),

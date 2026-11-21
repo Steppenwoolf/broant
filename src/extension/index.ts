@@ -37,8 +37,14 @@ chrome.runtime.onInstalled.addListener(details => {
 });
 // Settings → Data → Delete everything goes through the RunManager, which stops running tasks first.
 chrome.runtime.onMessage.addListener((message: unknown, sender, reply) => {
-  const m = message as { type?: string; op?: 'delete-all' };
-  if (m?.type !== DATA_REQUEST || sender.id !== chrome.runtime.id) return;
+  const m = message as { type?: string; op?: 'delete-all'; conversationId?: string };
+  if (sender.id !== chrome.runtime.id) return;
+  if (m?.type === 'broant:stop' || m?.type === 'nanobrowser:stop-run') {
+    runManager.stop(m.conversationId);
+    reply?.({ ok: true });
+    return true;
+  }
+  if (m?.type !== DATA_REQUEST) return;
   const done = m.op === 'delete-all' ? runManager.deleteAll() : Promise.reject(new Error('unknown request'));
   done.then(
     () => reply({ ok: true }),

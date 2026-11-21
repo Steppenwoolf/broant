@@ -34,6 +34,7 @@ import { useShortcuts } from '@src/ui/shortcuts';
 import { AutoNotice } from '@src/ui/auto-notice';
 import { HistoryIcon, LogoMark, NewChatIcon, SettingsIcon } from '@src/ui/icons';
 import { websiteUrl } from '@src/ui/links';
+import { TelemetryHeader } from './TelemetryHeader';
 
 const NO_PROVIDERS: ProviderConfig[] = [];
 const NO_KEYS: Record<string, string> = {};
@@ -386,37 +387,16 @@ export function App() {
 
   return (
     <div className={`flex h-full flex-col${empty && state.loaded ? ' nb-start' : ''}`}>
-      {/* The header has no field of its own, so it is part of the panel; a line under it only above a conversation. */}
-      <header
-        className={`flex items-center gap-1 border-b px-2 py-1.5 ${empty && state.loaded ? 'border-transparent' : 'border-nb-border/60'}`}>
-        {/* The mark opens the website in a new tab. */}
-        <a
-          href={websiteUrl('/', 'side-panel')}
-          target="_blank"
-          rel="noreferrer"
-          title={t('panel.website')}
-          aria-label={t('panel.website')}
-          className="ml-1 flex shrink-0 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-nb-accent">
-          <LogoMark size={20} />
-        </a>
-        {/* The title is for screen readers only; the header shows the mark and three buttons. */}
-        <h1 className="sr-only">{conversation?.title || t('panel.newChat')}</h1>
-        <span className="flex-1" />
-        <IconButton label={t('panel.newChat')} onClick={() => newChat(confirmNewChat)}>
-          <NewChatIcon />
-        </IconButton>
-        {/* Recent tasks opens once the conversation in this tab stops; other tabs' panels are free. */}
-        <IconButton
-          label={t('history.title')}
-          title={active ? t('history.busy') : undefined}
-          disabled={active}
-          onClick={() => setHistoryOpen(true)}>
-          <HistoryIcon />
-        </IconButton>
-        <IconButton label={t('panel.settings')} onClick={() => void chrome.runtime.openOptionsPage()}>
-          <SettingsIcon />
-        </IconButton>
-      </header>
+      <TelemetryHeader
+        conversationTitle={conversation?.title}
+        active={active}
+        usedTokens={state.usage?.total ? state.usage.total.input + state.usage.total.output : 0}
+        bridgeEnabled={!!settings.bridgeEnabled}
+        onToggleBridge={() => void settingsStorage.set(s => ({ ...s, bridgeEnabled: !s.bridgeEnabled }))}
+        onNewChat={() => newChat(confirmNewChat)}
+        onOpenHistory={() => setHistoryOpen(true)}
+        onOpenSettings={() => void chrome.runtime.openOptionsPage()}
+      />
       {confirmNewChat ? (
         <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
           <span className="flex-1">{t('panel.newChatRunning')}</span>

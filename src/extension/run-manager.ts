@@ -197,6 +197,16 @@ export class RunManager {
     this.#emitQueue(conversationId, returned);
   }
 
+  stop(conversationId?: string): void {
+    if (conversationId) {
+      this.#stop(conversationId);
+    } else {
+      for (const id of Array.from(this.#runs.keys())) {
+        this.#stop(id);
+      }
+    }
+  }
+
   #conversationOfSessionTab(tabId: number): string | null {
     for (const [conversationId, session] of this.#sessions) if (session.hasTab(tabId)) return conversationId;
     return null;

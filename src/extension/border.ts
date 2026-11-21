@@ -137,23 +137,82 @@ export function setBorder(state: BorderState): Promise<void> | void {
     host.style.cssText =
       'all:initial;position:fixed;inset:0;pointer-events:none;z-index:2147483647;display:block;contain:strict';
     const root = host.attachShadow({ mode: 'closed' });
-    const blue = 'rgb(0 115 220 / 0.6)';
-    const violet = 'rgb(124 92 255 / 0.6)';
-    const along = (side: string) => `linear-gradient(${side}, ${violet}, ${blue} 25%, ${blue} 75%, ${violet})`;
+    const terracotta = 'rgb(200 90 50 / 0.7)';
+    const honey = 'rgb(217 119 6 / 0.7)';
+    const along = (side: string) => `linear-gradient(${side}, ${honey}, ${terracotta} 25%, ${terracotta} 75%, ${honey})`;
     root.innerHTML = `<style>
-      .glow { position: absolute; inset: 0; transition: opacity 150ms ease; }
-      .pulse { position: absolute; inset: 0; animation: breathe 2s ease-in-out infinite alternate; }
+      .glow { position: absolute; inset: 0; transition: opacity 150ms ease; pointer-events: none; }
+      .pulse { position: absolute; inset: 0; animation: breathe 2s ease-in-out infinite alternate; pointer-events: none; }
       @keyframes breathe { from { opacity: 0.6; } to { opacity: 1; } }
       @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
-      .edge { position: absolute; }
+      .edge { position: absolute; pointer-events: none; }
       .t, .b { left: 0; right: 0; height: 16px; background: ${along('to right')}; }
       .l, .r { top: 0; bottom: 0; width: 16px; background: ${along('to bottom')}; }
       .t { top: 0; mask-image: linear-gradient(to bottom, #000, transparent); }
       .b { bottom: 0; mask-image: linear-gradient(to top, #000, transparent); }
       .l { left: 0; mask-image: linear-gradient(to right, #000, transparent); }
       .r { right: 0; mask-image: linear-gradient(to left, #000, transparent); }
-    </style><div class="glow"><div class="pulse"><div class="edge t"></div><div class="edge b"></div><div class="edge l"></div><div class="edge r"></div></div></div>`;
+      .hud {
+        position: fixed;
+        top: 14px;
+        right: 18px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 12px;
+        background: #14110F;
+        border: 1px solid #C85A32;
+        border-radius: 9999px;
+        color: #F5EFE6;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 12px;
+        font-weight: 500;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+        pointer-events: auto;
+        user-select: none;
+        z-index: 2147483647;
+      }
+      .hud-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background-color: #D97706;
+        box-shadow: 0 0 6px #D97706;
+        animation: breathe 1.5s ease-in-out infinite alternate;
+      }
+      .hud-stop {
+        all: unset;
+        cursor: pointer;
+        background: #C85A32;
+        color: #FFFBF5;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.2;
+        transition: background 0.15s ease, transform 0.1s ease;
+      }
+      .hud-stop:hover {
+        background: #E07A5F;
+      }
+      .hud-stop:active {
+        transform: scale(0.95);
+      }
+    </style><div class="glow"><div class="pulse"><div class="edge t"></div><div class="edge b"></div><div class="edge l"></div><div class="edge r"></div></div><div class="hud"><span class="hud-dot"></span><span>BroAnt &bull; Co-pilot Active</span><button type="button" class="hud-stop" id="hud-stop-btn">Stop</button></div></div>`;
     document.documentElement.appendChild(host);
+    const stopBtn = root.querySelector('#hud-stop-btn');
+    if (stopBtn) {
+      stopBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        e.preventDefault();
+        try {
+          globalThis.chrome?.runtime?.sendMessage?.({ type: 'broant:stop' });
+        } catch {
+          // ignore
+        }
+        remove();
+      });
+    }
     // A page kept in the back-forward cache keeps its DOM, and its timers wait: it must not keep a border.
     const onHide = () => remove();
     addEventListener('pagehide', onHide);

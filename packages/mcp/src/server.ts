@@ -296,18 +296,24 @@ export function createBroantMcpServer(hub: BridgeHub, port: number): McpServer {
     'browser_close_session',
     'Release the controlled browser tab and detach the Chrome debugger for a sticky session.',
     {
-      session_id: z.string().min(1).describe('Session ID to close'),
+      session_id: z.string().optional().describe('Session ID to close. If omitted, closes the active sticky session.'),
     },
     async ({ session_id }) => {
+      const targetSessionId = session_id || hub.defaultSessionId;
+      if (!targetSessionId) {
+        return {
+          content: [{ type: 'text' as const, text: 'No active browser session to close.' }],
+        };
+      }
       const requestId = crypto.randomUUID();
       try {
         await hub.sendCommand(
-          { type: 'close_session', request_id: requestId, session_id },
+          { type: 'close_session', request_id: requestId, session_id: targetSessionId },
           { correlationId: requestId, expectTerminal: 'tool_result', timeoutMs: 5_000 },
         );
-        hub.forgetSession(session_id);
+        hub.forgetSession(targetSessionId);
         return {
-          content: [{ type: 'text' as const, text: `Closed browser session ${session_id}` }],
+          content: [{ type: 'text' as const, text: `Closed browser session ${targetSessionId}` }],
         };
       } catch (err) {
         return formatBridgeError(err, port);

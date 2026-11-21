@@ -1,5 +1,5 @@
 // The panel's state, built only from the worker's events.
-import type { Conversation, LivePair, QueuedMessage, RunStatus } from '@src/store/types';
+import type { Conversation, LivePair, QueuedMessage, RunStatus, Usage } from '@src/store/types';
 import type {
   AttachmentRef,
   ConversationSummary,
@@ -22,6 +22,7 @@ export interface PanelState {
   reason?: string;
   /** When the latest run began: the live elapsed time of the activity block. */
   startedAt?: string;
+  usage?: { turn: Usage; total: Usage };
   queue: QueuedMessage[];
   /** Queued messages given back on Stop, for the composer. */
   returned: QueuedMessage[];
@@ -125,6 +126,8 @@ export function reduce(state: PanelState, event: PanelEvent): PanelState {
       return { ...state, history: event.items };
     case 'tabs':
       return { ...state, tabs: event.tabs };
+    case 'usage':
+      return { ...state, usage: { turn: event.turn, total: event.total } };
     case 'error':
       return { ...state, error: event.message };
     case 'selection':

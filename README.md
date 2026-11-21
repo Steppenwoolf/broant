@@ -1,3 +1,11 @@
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/brand/logo-horizontal.png">
+    <source media="(prefers-color-scheme: light)" srcset="public/brand/logo-horizontal-light.png">
+    <img src="public/brand/logo-horizontal.png" alt="BroAnt Logo" width="460">
+  </picture>
+</div>
+
 # BroAnt 🐜
 
 > **Hardworking AI Browser Worker & Native MCP Bridge**  
