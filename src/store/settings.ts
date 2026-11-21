@@ -46,6 +46,12 @@ export interface Settings {
   bridgeServerUrl: string;
   /** Agent Bridge authentication token. */
   bridgeAuthToken: string;
+  /** Whether the floating compact Mini-Rail is shown on web pages. */
+  showMiniRail: boolean;
+  /** DOM pruning mode for observation and mini-rail (compact ~14k vs standard). */
+  domPruningMode: 'compact' | 'standard';
+  /** Currently loaded model name in local provider (LM Studio / Ollama) if any. */
+  loadedModelName?: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -69,6 +75,8 @@ export const DEFAULT_SETTINGS: Settings = {
   bridgeEnabled: false,
   bridgeServerUrl: 'ws://127.0.0.1:8765',
   bridgeAuthToken: 'broant-secret-key',
+  showMiniRail: true,
+  domPruningMode: 'compact',
 };
 
 /** Stored settings over the defaults, so a field added later has its default. */

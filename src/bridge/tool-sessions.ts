@@ -3,6 +3,7 @@
 // preserving element refs and CDP attachment without reconnect overhead.
 
 import type { Controller, Session } from '@src/browser-control';
+import { bridgeActivityStore } from '@src/store/bridge-activity';
 
 export interface ManagedToolSession {
   sessionId: string;
@@ -81,6 +82,12 @@ export class BridgeToolSessionManager {
     this.sessions.set(session.id, managed);
     this.tabToSession.set(tabId, session.id);
 
+    bridgeActivityStore.update({
+      phase: 'held',
+      activeSessions: this.sessions.size,
+      activeTabId: tabId,
+    });
+
     if (typeof chrome !== 'undefined' && chrome.scripting?.executeScript) {
       void import('@src/extension/border').then(({ injectBorder }) => {
         void injectBorder(tabId, 'on').catch(() => undefined);
@@ -93,6 +100,7 @@ export class BridgeToolSessionManager {
   async runExclusive<T>(
     managed: ManagedToolSession,
     fn: (session: Session) => Promise<T>,
+    toolName?: string,
   ): Promise<T> {
     if (managed.busy) {
       const err = new Error('Tab session is busy with another tool call');
@@ -102,12 +110,30 @@ export class BridgeToolSessionManager {
 
     managed.busy = true;
     managed.lastUsedAt = Date.now();
+    bridgeActivityStore.update({
+      phase: 'executing',
+      currentTool: toolName,
+      activeTabId: managed.tabId,
+      activeSessions: this.sessions.size,
+    });
     try {
       return await fn(managed.session);
     } finally {
       managed.busy = false;
       managed.lastUsedAt = Date.now();
+      bridgeActivityStore.update({
+        phase: this.sessions.size > 0 ? 'held' : 'idle',
+        currentTool: undefined,
+        activeTabId: managed.tabId,
+        activeSessions: this.sessions.size,
+      });
     }
+  }
+
+  async closeAll(): Promise<boolean> {
+    const res = await this.close();
+    bridgeActivityStore.reset();
+    return res;
   }
 
   async close(sessionId?: string): Promise<boolean> {
@@ -124,6 +150,10 @@ export class BridgeToolSessionManager {
     if (!entry) return false;
     this.sessions.delete(sessionId);
     this.tabToSession.delete(entry.tabId);
+    bridgeActivityStore.update({
+      activeSessions: this.sessions.size,
+      phase: this.sessions.size > 0 ? 'held' : 'idle',
+    });
 
     if (typeof chrome !== 'undefined' && chrome.scripting?.executeScript) {
       void import('@src/extension/border').then(({ injectBorder }) => {

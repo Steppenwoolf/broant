@@ -75,6 +75,18 @@ export class BridgeDispatcher {
     return this.toolSessions;
   }
 
+  async killAllActivity(): Promise<void> {
+    for (const task of this.activeTasks.values()) {
+      try {
+        task.cancel();
+      } catch {
+        // ignore
+      }
+    }
+    this.activeTasks.clear();
+    await this.toolSessions.closeAll();
+  }
+
   async dispatch(msg: BridgeInboundMessage) {
     if (msg.type === 'get_status') {
       let tabs: chrome.tabs.Tab[] = [];
@@ -210,8 +222,10 @@ export class BridgeDispatcher {
       delete resolvedArgs.ephemeral;
 
       const result = await Promise.race([
-        this.toolSessions.runExclusive(managed, s =>
-          s.call(resolvedTool, resolvedArgs, { signal: abortController.signal }),
+        this.toolSessions.runExclusive(
+          managed,
+          s => s.call(resolvedTool, resolvedArgs, { signal: abortController.signal }),
+          resolvedTool,
         ),
         new Promise<never>((_, reject) => {
           abortController.signal.addEventListener('abort', () =>
