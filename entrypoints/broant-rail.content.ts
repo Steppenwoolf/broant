@@ -284,7 +284,7 @@ export default defineContentScript({
     dock.innerHTML = `
       <span class="tuck-dot" id="ba-tuck-mcp"></span>
       <span class="tuck-dot" id="ba-tuck-act"></span>
-      <button class="btn" id="ba-open" data-tip="BroAnt • Click: Panel | DblClick: Hide">
+      <button class="btn" id="ba-open" data-tip="BroAnt • Click: Panel | DblClick: Tuck">
         ${EMBLEM_SVG}
       </button>
       <button class="btn" id="ba-mcp" data-tip="MCP Gate: OFF">
@@ -388,10 +388,19 @@ export default defineContentScript({
       }
     });
 
-    btnOpen.addEventListener('click', () => sendAction('open_sidepanel'));
-    btnOpen.addEventListener('dblclick', e => {
+    let clickTimer: number | null = null;
+    btnOpen.addEventListener('click', e => {
       e.stopPropagation();
-      dock.classList.add('tucked');
+      if (clickTimer !== null) {
+        window.clearTimeout(clickTimer);
+        clickTimer = null;
+        dock.classList.toggle('tucked');
+      } else {
+        clickTimer = window.setTimeout(() => {
+          clickTimer = null;
+          sendAction('open_sidepanel');
+        }, 240);
+      }
     });
 
     btnMcp.addEventListener('click', () => sendAction('toggle_mcp'));

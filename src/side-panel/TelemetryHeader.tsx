@@ -105,21 +105,20 @@ export function TelemetryHeader({
 
   return (
     <header className="relative flex h-11 shrink-0 items-center justify-between border-b border-ba-border/60 bg-ba-bg px-2.5">
-      {/* Left: Brand mark and two-tone BroAnt typography */}
+      {/* Left: Brand mark and two-tone BroAnt typography — symmetric toggle to collapse back to rail */}
       <div className="flex items-center gap-2">
-        <a
-          href={websiteUrl('/', 'side-panel')}
-          target="_blank"
-          rel="noreferrer"
-          title={t('panel.website')}
-          aria-label={t('panel.website')}
-          className="flex shrink-0 rounded transition-transform hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-accent">
+        <button
+          type="button"
+          onClick={handleCollapse}
+          title="Collapse to Rail"
+          aria-label="Collapse to Rail"
+          className="group flex items-center gap-2 rounded transition-transform hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-accent">
           <LogoMark size={20} />
-        </a>
-        <span className="flex items-baseline text-[14px] font-bold tracking-tight select-none">
-          <span className="text-ba-fg-strong">Bro</span>
-          <span className="text-ba-accent">Ant</span>
-        </span>
+          <span className="flex items-baseline text-[14px] font-bold tracking-tight select-none">
+            <span className="text-ba-fg-strong">Bro</span>
+            <span className="text-ba-accent">Ant</span>
+          </span>
+        </button>
         {usedTokens > 0 ? (
           <span
             title={`Context usage: ${usedTokens.toLocaleString()} / ${maxTokens.toLocaleString()} tokens (${percent}%)`}
@@ -145,7 +144,7 @@ export function TelemetryHeader({
                 ? 'MCP Gate: Linked / Live (Click to disable)'
                 : mcpState === 'armed'
                   ? 'MCP Gate: Armed / Waiting for client (Click to disable)'
-                  : 'MCP Gate: OFF (Click to enable)'
+                  : 'MCP Gate: Off (Click to enable)'
             }
             className="flex items-center gap-1 transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-1 focus-visible:outline-ba-accent">
             <span
@@ -247,8 +246,8 @@ export function TelemetryHeader({
         <button
           type="button"
           onClick={handleCollapse}
-          title="Згорнути в компактну рейку (Collapse to Rail)"
-          aria-label="Згорнути в компактну рейку"
+          title="Collapse to Rail"
+          aria-label="Collapse to Rail"
           className="flex size-7 items-center justify-center rounded-lg text-ba-muted transition-colors hover:bg-ba-surface hover:text-ba-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-accent">
           <CollapseRailIcon size={15} />
         </button>
