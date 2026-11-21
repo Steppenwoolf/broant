@@ -2,16 +2,35 @@
 import { bridgeActivityStore } from '@src/store/bridge-activity';
 import { DEFAULT_SETTINGS, bridgeConnectedStorage, settingsStorage } from '@src/store/settings';
 import type { BridgeDispatcher } from '@src/bridge/dispatcher';
+import { PANEL_PORT_NAME } from '@src/ui/protocol';
 
 export function initRailHub(getDispatcher: () => BridgeDispatcher | null) {
   const ports = new Set<chrome.runtime.Port>();
+  const sidePanelPorts = new Set<chrome.runtime.Port>();
+
+  async function isSidePanelOpen(): Promise<boolean> {
+    if (sidePanelPorts.size > 0) return true;
+    if (typeof chrome !== 'undefined' && chrome.runtime?.getContexts) {
+      try {
+        const contexts = await chrome.runtime.getContexts({
+          contextTypes: [chrome.runtime.ContextType.SIDE_PANEL],
+        });
+        return contexts.length > 0;
+      } catch {
+        // fallback
+      }
+    }
+    return false;
+  }
 
   async function buildSnapshot() {
     const settings = await settingsStorage.get().catch(() => DEFAULT_SETTINGS);
     const connected = await bridgeConnectedStorage.get().catch(() => false);
+    const sidePanelOpen = await isSidePanelOpen();
     const theme = settings.theme === 'light' ? 'light' : 'dark';
     return {
       visible: settings.showMiniRail ?? true,
+      sidePanelOpen,
       theme,
       bridgeEnabled: Boolean(settings.bridgeEnabled),
       bridgeConnected: Boolean(connected),
@@ -36,6 +55,16 @@ export function initRailHub(getDispatcher: () => BridgeDispatcher | null) {
 
   if (typeof chrome !== 'undefined' && chrome.runtime?.onConnect) {
     chrome.runtime.onConnect.addListener(port => {
+      if (port.name === PANEL_PORT_NAME) {
+        sidePanelPorts.add(port);
+        void broadcast();
+        port.onDisconnect.addListener(() => {
+          sidePanelPorts.delete(port);
+          void broadcast();
+        });
+        return;
+      }
+
       if (port.name !== 'broant-rail') return;
       ports.add(port);
       void buildSnapshot().then(state => {

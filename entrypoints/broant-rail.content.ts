@@ -4,6 +4,7 @@ import type { BridgeActivityState } from '@src/store/bridge-activity';
 
 interface RailStateSnapshot {
   visible: boolean;
+  sidePanelOpen?: boolean;
   theme: 'dark' | 'light';
   bridgeEnabled: boolean;
   bridgeConnected: boolean;
@@ -15,6 +16,7 @@ interface RailStateSnapshot {
 
 const DEFAULT_STATE: RailStateSnapshot = {
   visible: true,
+  sidePanelOpen: false,
   theme: 'dark',
   bridgeEnabled: false,
   bridgeConnected: false,
@@ -108,7 +110,7 @@ const RAIL_CSS = `
   --ba-radius: 10px;
 }
 .dock.hidden {
-  display: none;
+  display: none !important;
 }
 .dock.tucked {
   position: fixed;
@@ -326,7 +328,8 @@ export default defineContentScript({
 
     function render(state: RailStateSnapshot) {
       currentState = state;
-      dock.classList.toggle('hidden', !state.visible);
+      const shouldHide = !state.visible || Boolean(state.sidePanelOpen);
+      dock.classList.toggle('hidden', shouldHide);
       dock.dataset.theme = state.theme;
 
       // LED 1: MCP Gate

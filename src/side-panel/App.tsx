@@ -396,6 +396,7 @@ export function App() {
         onNewChat={() => newChat(confirmNewChat)}
         onOpenHistory={() => setHistoryOpen(true)}
         onOpenSettings={() => void chrome.runtime.openOptionsPage()}
+        onCollapse={() => window.close()}
       />
       {confirmNewChat ? (
         <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
