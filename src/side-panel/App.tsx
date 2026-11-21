@@ -442,14 +442,14 @@ export function App() {
           {/* With no model, the no-model card above the composer takes the quick start's place. */}
           {/* The quick start stays hidden while the What's new card shows. */}
           {state.loaded && models.length && !whatsNew ? (
-            <ul className="flex flex-col items-start gap-2 px-3 pb-2" aria-label={t('panel.starters')}>
+            <ul className="flex flex-wrap items-center justify-center gap-1.5 px-3 pb-2" aria-label={t('panel.starters')}>
               {starters.map(s => (
-                <li key={s.key} className="max-w-full">
+                <li key={s.key}>
                   <button
                     type="button"
                     title={s.title}
                     disabled={!model}
-                    className="max-w-full truncate rounded-full border border-nb-border/60 bg-nb-bg px-4 py-2 text-[15px] text-nb-fg shadow-sm transition-colors hover:bg-nb-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-nb-accent disabled:opacity-40"
+                    className="rounded-full border border-ba-border/60 bg-ba-surface px-2.5 py-1 text-xs text-ba-fg transition-colors hover:border-ba-border hover:bg-ba-surface-elevated focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-accent disabled:opacity-40"
                     onClick={s.run}>
                     {s.label}
                   </button>
