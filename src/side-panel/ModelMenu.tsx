@@ -86,7 +86,7 @@ export function ModelMenu({
     // when focus leaves it, so Escape never reaches the panel's Stop while it stays open.
     <div
       ref={root}
-      className="relative flex min-w-0 shrink"
+      className="flex min-w-0 shrink"
       onBlur={e => {
         if (open && !root.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
       }}>
@@ -138,22 +138,24 @@ export function ModelMenu({
               items[(at + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
             }
           }}
-          className="absolute bottom-11 left-2 z-10 flex w-64 max-w-[calc(100%-1rem)] flex-col rounded-xl border border-nb-border bg-nb-bg p-1 text-xs shadow-pop">
+          className="absolute bottom-11 left-2 z-10 flex w-72 max-w-[calc(100%-1rem)] flex-col rounded-xl border border-ba-border bg-ba-bg p-1 text-xs text-ba-fg shadow-pop">
           {onPreferLoaded !== undefined ? (
             <label
-              className="flex items-center justify-between gap-2 border-b border-nb-border px-3 py-2 text-xs text-nb-fg cursor-pointer select-none hover:bg-nb-surface rounded-t-lg"
+              className="flex items-center justify-between gap-2 border-b border-ba-border px-3 py-2 text-xs text-ba-fg cursor-pointer select-none hover:bg-ba-surface rounded-t-lg transition-colors"
               title={t('composer.preferLoadedTooltip')}>
               <span className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={preferLoaded}
                   onChange={e => onPreferLoaded(e.target.checked)}
-                  className="size-3.5 rounded border-ba-border text-ba-accent focus:ring-ba-accent/40 accent-ba-accent cursor-pointer"
+                  className="size-3.5 rounded border-ba-border text-ba-honey focus:ring-ba-honey/40 accent-ba-honey cursor-pointer"
                 />
-                <span>{t('composer.preferLoaded')}</span>
+                <span className="font-medium">{t('composer.preferLoaded')}</span>
               </span>
               {activeLoadedModelName ? (
-                <span className="text-[11px] text-nb-muted truncate max-w-[90px]">{activeLoadedModelName}</span>
+                <span className="text-[10px] font-mono text-ba-honey bg-ba-honey/15 px-1.5 py-0.5 rounded border border-ba-honey/30 truncate max-w-[120px]">
+                  {activeLoadedModelName}
+                </span>
               ) : null}
             </label>
           ) : null}
@@ -167,16 +169,18 @@ export function ModelMenu({
                 // One Tab stop for the list, so Tab goes on to the effort row; the arrow keys move within it.
                 tabIndex={sameRef(model, m.ref) || (!chosen && m === models[0]) ? 0 : -1}
                 data-value={valueOf(m.ref)}
-                className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-left hover:bg-nb-surface focus-visible:bg-nb-surface focus-visible:outline-none"
+                className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-ba-surface focus-visible:bg-ba-surface focus-visible:outline-none"
                 onClick={() => {
                   close();
                   if (!sameRef(model, m.ref)) onModel(m.ref);
                 }}>
-                <span className="min-w-0 flex-1 truncate text-nb-fg">{m.label}</span>
+                <span className="min-w-0 flex-1 truncate text-ba-fg">{m.label}</span>
                 {m.name === activeLoadedModelName ? (
-                  <span className="shrink-0 text-[10px] text-nb-muted">{t('composer.loaded')}</span>
+                  <span className="shrink-0 text-[10px] font-medium text-ba-honey bg-ba-honey/15 px-1.5 py-0.5 rounded border border-ba-honey/30">
+                    {t('composer.loaded')}
+                  </span>
                 ) : null}
-                <CheckIcon size={14} className={sameRef(model, m.ref) ? 'text-nb-accent' : 'invisible'} />
+                <CheckIcon size={14} className={sameRef(model, m.ref) ? 'text-ba-honey' : 'invisible'} />
               </button>
             ))}
           </div>
@@ -201,11 +205,11 @@ function EffortRow({
   onReasoning: (reasoning: ReasoningEffort) => void;
 }) {
   return (
-    <div className="mt-1 flex flex-col gap-1.5 border-t border-nb-border px-3 pb-1.5 pt-2">
-      <span id="nb-reasoning-label" className="text-nb-muted">
+    <div className="mt-1 flex flex-col gap-1.5 border-t border-ba-border px-3 pb-1.5 pt-2">
+      <span id="ba-reasoning-label" className="text-ba-muted font-medium">
         {t('composer.reasoning')}
       </span>
-      <div role="radiogroup" aria-labelledby="nb-reasoning-label" className="flex flex-wrap gap-1">
+      <div role="radiogroup" aria-labelledby="ba-reasoning-label" className="flex flex-wrap gap-1">
         {row.pills.map(p => (
           <button
             key={p}
@@ -229,7 +233,7 @@ function EffortRow({
               onReasoning(next);
               setTimeout(() => group?.querySelector<HTMLElement>(`[data-value="${next}"]`)?.focus());
             }}
-            className={`flex-1 whitespace-nowrap rounded-full border px-2 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-nb-accent/40 ${p === row.shown ? 'border-nb-accent bg-nb-accent/10 font-medium text-nb-fg' : 'border-nb-border text-nb-muted hover:text-nb-fg'}`}
+            className={`flex-1 whitespace-nowrap rounded-full border px-2 py-1 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ba-honey/40 ${p === row.shown ? 'border-ba-honey bg-ba-honey/15 font-medium text-ba-honey shadow-sm' : 'border-ba-border/70 bg-ba-surface/40 text-ba-muted hover:border-ba-border hover:text-ba-fg hover:bg-ba-surface'}`}
             onClick={() => {
               if (p !== value) onReasoning(p);
             }}>
@@ -237,7 +241,7 @@ function EffortRow({
           </button>
         ))}
       </div>
-      {running ? <span className="text-nb-muted">{t('composer.reasoningNextRun')}</span> : null}
+      {running ? <span className="text-ba-muted">{t('composer.reasoningNextRun')}</span> : null}
     </div>
   );
 }
