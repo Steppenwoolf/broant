@@ -69,6 +69,8 @@ export interface TurnResult {
   reasoningIgnored?: boolean;
   /** The server refused the output limit, and took this one, halved from it, instead. */
   outputLimit?: number;
+  /** The server refused strict conversational role alternation, and the request was sent again with normalized roles. */
+  alternationNormalized?: boolean;
 }
 
 export interface RetryPolicy {
@@ -192,6 +194,61 @@ export function withoutImages(messages: ModelMessage[]): ModelMessage[] | null {
   return found ? out : null;
 }
 
+/**
+ * A 400 or 500 error naming conversation role alternation (e.g. Jinja template exception on Mistral / local LLM):
+ * conversation roles must strictly alternate user and assistant except for tool calls and results.
+ */
+export function refusesAlternation(status: number | undefined, message: string): boolean {
+  return (status === 400 || status === 500 || status === undefined) && /alternate.*roles|roles.*alternate/i.test(message);
+}
+
+/**
+ * Normalizes wire messages for models with strict role-alternating Jinja templates:
+ * - If a user message immediately follows a tool result message, absorbs its text into the preceding tool result.
+ * - Merges consecutive messages of the same role.
+ */
+export function withAlternatingRoles(messages: ModelMessage[]): ModelMessage[] {
+  const out: ModelMessage[] = [];
+  for (const m of messages) {
+    const prev = out[out.length - 1];
+    if (m.role === 'user' && prev && prev.role === 'tool' && Array.isArray(prev.content)) {
+      const toolParts = [...(prev.content as Array<Record<string, unknown>>)];
+      const lastTool = { ...toolParts[toolParts.length - 1] };
+      const text =
+        typeof m.content === 'string'
+          ? m.content
+          : Array.isArray(m.content)
+            ? (m.content as Array<{ type?: string; text?: string }>)
+                .filter(p => p.type === 'text' && p.text)
+                .map(p => p.text)
+                .join('\n\n')
+            : '';
+      if (lastTool && text) {
+        if (typeof lastTool.output === 'object' && lastTool.output !== null && 'value' in lastTool.output) {
+          lastTool.output = {
+            ...lastTool.output,
+            value: `${(lastTool.output as { value: string }).value}\n\n${text}`,
+          };
+        } else if (typeof lastTool.output === 'string') {
+          lastTool.output = `${lastTool.output}\n\n${text}`;
+        }
+        toolParts[toolParts.length - 1] = lastTool;
+        out[out.length - 1] = { ...prev, content: toolParts as never };
+        continue;
+      }
+    }
+    if (prev && prev.role === m.role && Array.isArray(prev.content) && Array.isArray(m.content)) {
+      out[out.length - 1] = {
+        ...prev,
+        content: [...(prev.content as unknown[]), ...(m.content as unknown[])] as never,
+      };
+      continue;
+    }
+    out.push(m);
+  }
+  return out;
+}
+
 /** Runs one turn: streams the reply, collects its tool calls, retries before anything streamed. */
 export async function streamTurn(request: TurnRequest): Promise<TurnResult> {
   const { maxConcurrent, baseUrl, kind } = request.chat.spec;
@@ -216,6 +273,7 @@ async function streamTurnNow(request: TurnRequest): Promise<TurnResult> {
   let messages = request.messages;
   let imagesDropped = false;
   let reasoningIgnored = false;
+  let alternationNormalized = false;
   let maxOutputTokens = request.maxOutputTokens ?? request.chat.spec.maxOutputTokens;
   let outputLimit: number | undefined;
   for (;;) {
@@ -303,6 +361,7 @@ async function streamTurnNow(request: TurnRequest): Promise<TurnResult> {
         ...(imagesDropped ? { imagesDropped } : {}),
         ...(reasoningIgnored ? { reasoningIgnored } : {}),
         ...(outputLimit ? { outputLimit } : {}),
+        ...(alternationNormalized ? { alternationNormalized } : {}),
       };
     }
     // The same request once more, not counted as an attempt: at Low's value when None's was refused, without the option
@@ -341,6 +400,16 @@ async function streamTurnNow(request: TurnRequest): Promise<TurnResult> {
       attempt--;
       continue;
     }
+    const alternationFixed =
+      fallback && !alternationNormalized && refusesAlternation(status, errorText(failure))
+        ? withAlternatingRoles(messages)
+        : null;
+    if (alternationFixed && JSON.stringify(alternationFixed) !== JSON.stringify(messages)) {
+      messages = alternationFixed;
+      alternationNormalized = true;
+      attempt--;
+      continue;
+    }
     if (!started && attempt < policy.attempts && isRetryable(failure)) {
       await sleep(backoffMs(attempt, policy, failure), request.signal);
       if (request.signal?.aborted) {
@@ -371,6 +440,7 @@ async function streamTurnNow(request: TurnRequest): Promise<TurnResult> {
       ...(imagesDropped ? { imagesDropped } : {}),
       // A limit the server took before the request failed for another reason is still the server's limit.
       ...(outputLimit && !refusesOutputLimit(status, errorText(failure)) ? { outputLimit } : {}),
+      ...(alternationNormalized ? { alternationNormalized } : {}),
     };
   }
 }

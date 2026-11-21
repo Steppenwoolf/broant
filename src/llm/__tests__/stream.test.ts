@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { APICallError } from 'ai';
 import { ScriptedModel } from '../scripted';
-import { backoffMs, DEFAULT_RETRY, refusesOutputLimit, streamTurn } from '../stream';
+import {
+  backoffMs,
+  DEFAULT_RETRY,
+  refusesAlternation,
+  refusesOutputLimit,
+  streamTurn,
+  withAlternatingRoles,
+} from '../stream';
 import { isContextOverflow } from '../overflow';
 import { requestOutputLimit } from '../profiles';
 import { OUTPUT_LIMIT } from '../catalogue';
@@ -292,5 +299,114 @@ describe('the limit per local server', () => {
     );
     expect(runs.every(r => r.text === 'ok')).toBe(true);
     expect(max).toBe(1);
+  });
+});
+
+describe('refusesAlternation and withAlternatingRoles', () => {
+  it('detects Jinja template alternation errors', () => {
+    const errorMsg =
+      'Engine protocol predict request returned 500: {"error":{"code":500,"message":"Jinja Exception: After the optional system message, conversation roles must alternate user and assistant roles except for tool calls and results."}}';
+    expect(refusesAlternation(500, errorMsg)).toBe(true);
+    expect(refusesAlternation(400, errorMsg)).toBe(true);
+    expect(refusesAlternation(400, 'different error')).toBe(false);
+  });
+
+  it('absorbs user messages following a tool into the tool result output', () => {
+    const original = [
+      { role: 'user', content: 'search' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'ok' },
+          { type: 'tool-call', toolCallId: 'c1', toolName: 'snapshot', input: {} },
+        ],
+      },
+      {
+        role: 'tool',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: 'c1',
+            toolName: 'snapshot',
+            output: { type: 'text', value: 'snapshot DOM' },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'text', text: '<browser-state>\ntabs: 1\n</browser-state>' }],
+      },
+    ] as any;
+
+    const normalized = withAlternatingRoles(original);
+    expect(normalized).toHaveLength(3);
+    expect(normalized[2].role).toBe('tool');
+    const toolContent = normalized[2].content as any;
+    expect(toolContent[0].output.value).toBe(
+      'snapshot DOM\n\n<browser-state>\ntabs: 1\n</browser-state>',
+    );
+  });
+
+  it('retries automatically and succeeds when alternation is refused', async () => {
+    const jinjaError = apiError(
+      500,
+      JSON.stringify({
+        error: {
+          message:
+            'Jinja Exception: After the optional system message, conversation roles must alternate user and assistant roles except for tool calls and results.',
+        },
+      }),
+    );
+
+    let calledWithRoles: string[] = [];
+    const scripted = new ScriptedModel(call => {
+      calledWithRoles = (call.prompt as any[]).map(m => m.role);
+      if (calledWithRoles.includes('tool')) {
+        const last = calledWithRoles[calledWithRoles.length - 1];
+        if (last === 'user') {
+          return { error: jinjaError };
+        }
+      }
+      return { text: 'ok' };
+    });
+
+    const messages = [
+      { role: 'user', content: 'search' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'ok' },
+          { type: 'tool-call', toolCallId: 'c1', toolName: 'snapshot', input: {} },
+        ],
+      },
+      {
+        role: 'tool',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: 'c1',
+            toolName: 'snapshot',
+            output: { type: 'text', value: 'snapshot DOM' },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'text', text: '<browser-state>\ntabs: 1\n</browser-state>' }],
+      },
+    ] as any;
+
+    const result = await streamTurn({
+      chat: scripted.chat(),
+      system: '',
+      messages,
+      sleep: noSleep,
+    });
+
+    expect(result.text).toBe('ok');
+    expect(result.alternationNormalized).toBe(true);
+    expect(result.attempts).toBe(1);
+    expect(scripted.calls).toHaveLength(2);
+    expect(calledWithRoles).toEqual(['system', 'user', 'assistant', 'tool']);
   });
 });
