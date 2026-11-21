@@ -86,7 +86,7 @@ export function ModelMenu({
     // when focus leaves it, so Escape never reaches the panel's Stop while it stays open.
     <div
       ref={root}
-      className="flex min-w-0 shrink-[2]"
+      className="relative flex min-w-0 shrink"
       onBlur={e => {
         if (open && !root.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
       }}>
@@ -99,7 +99,7 @@ export function ModelMenu({
         aria-expanded={open}
         data-label={t('composer.model')}
         data-value={model ? valueOf(model) : ''}
-        className="flex min-w-0 items-center gap-1 rounded-full border border-transparent px-2 py-1 text-xs text-nb-muted hover:border-nb-border hover:text-nb-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-nb-accent/40 disabled:hover:border-transparent disabled:hover:text-nb-muted"
+        className="flex min-w-[80px] max-w-[130px] items-center gap-1 whitespace-nowrap rounded-full border border-ba-border/60 bg-ba-surface px-2.5 py-1 text-xs font-medium text-ba-fg transition-colors hover:border-ba-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ba-accent/40 disabled:opacity-40"
         onClick={() => setOpen(o => !o)}>
         <span className="truncate">{label}</span>
         {/* In a narrow panel the effort goes first, then the name is cut. */}
@@ -148,7 +148,7 @@ export function ModelMenu({
                   type="checkbox"
                   checked={preferLoaded}
                   onChange={e => onPreferLoaded(e.target.checked)}
-                  className="size-3.5 rounded border-nb-border text-nb-accent focus:ring-nb-accent/40 accent-nb-accent cursor-pointer"
+                  className="size-3.5 rounded border-ba-border text-ba-accent focus:ring-ba-accent/40 accent-ba-accent cursor-pointer"
                 />
                 <span>{t('composer.preferLoaded')}</span>
               </span>

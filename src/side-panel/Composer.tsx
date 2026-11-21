@@ -15,7 +15,7 @@ import { ModeMenu } from '@src/ui/mode-menu';
 import { ModelMenu } from './ModelMenu';
 import type { ModelChoice } from './ModelMenu';
 import type { ReasoningEffort } from '@src/llm/catalogue';
-import { CloseIcon, FileIcon, MicIcon, PlusIcon, SendIcon, SpinnerIcon, StarIcon, StopIcon } from '@src/ui/icons';
+import { CheckIcon, ChipIcon, CloseIcon, FileIcon, MicIcon, PlusIcon, SendIcon, SpinnerIcon, StarIcon, StopIcon } from '@src/ui/icons';
 
 type VoicePhase = 'idle' | 'starting' | 'recording' | 'transcribing';
 
@@ -617,21 +617,32 @@ export function Composer({
             activeLoadedModelName={activeLoadedModelName}
           />
           {onPreferLoaded !== undefined ? (
-            <label
-              className="flex items-center gap-1.5 cursor-pointer select-none rounded-full px-2 py-1 text-xs text-ba-muted hover:border-ba-border hover:text-ba-fg border border-transparent"
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={preferLoaded}
+              onClick={() => onPreferLoaded(!preferLoaded)}
               title={
                 activeLoadedModelName
-                  ? `${t('composer.preferLoadedTooltip')} (${activeLoadedModelName})`
-                  : t('composer.preferLoadedTooltip')
-              }>
-              <input
-                type="checkbox"
-                checked={preferLoaded}
-                onChange={e => onPreferLoaded(e.target.checked)}
-                className="size-3.5 rounded border-ba-border text-ba-accent focus:ring-ba-accent/40 accent-ba-accent cursor-pointer"
-              />
-              <span className="whitespace-nowrap font-mono text-[11px]">{t('composer.loaded')}</span>
-            </label>
+                  ? `Use model currently loaded in LM Studio: ${activeLoadedModelName} (Auto VRAM Priority)`
+                  : 'Use model currently loaded in LM Studio / Ollama (Auto VRAM Priority)'
+              }
+              aria-label="Use model loaded in LM Studio"
+              className={`flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs transition-colors ${
+                preferLoaded
+                  ? 'border-ba-honey/80 bg-ba-honey/15 text-ba-honey shadow-[0_0_8px_rgba(217,119,6,0.25)]'
+                  : 'border-ba-border/60 bg-ba-surface text-ba-muted hover:border-ba-border hover:text-ba-fg'
+              }`}>
+              <span
+                className={`flex size-3.5 items-center justify-center rounded border transition-colors ${
+                  preferLoaded
+                    ? 'border-ba-honey bg-ba-honey text-ba-bg'
+                    : 'border-ba-border bg-ba-bg'
+                }`}>
+                {preferLoaded ? <CheckIcon size={10} className="stroke-[2.5]" /> : null}
+              </span>
+              <ChipIcon size={14} />
+            </button>
           ) : null}
           <button
             type="button"

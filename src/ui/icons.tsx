@@ -228,6 +228,15 @@ export const MoonIcon = (p: IconProps) => (
   </Svg>
 );
 
+/** Hardware CPU / VRAM microchip icon */
+export const ChipIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="6" y="6" width="12" height="12" rx="2" />
+    <rect x="9" y="9" width="6" height="6" rx="0.5" />
+    <path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4" />
+  </Svg>
+);
+
 export function LogoMark({ size = 20, className = '' }: { size?: number; className?: string }) {
   return <img src="/icon-128.png" alt="" width={size} height={size} className={`shrink-0 ${className}`} />;
 }
