@@ -15,7 +15,7 @@ except ImportError:
 WS_HOST = "127.0.0.1"
 WS_PORT = 8765
 HTTP_PORT = 8766
-EXPECTED_TOKEN = "nanobrowser-secret-key"
+VALID_TOKENS = {"nanobrowser-secret-key", "broant-secret-key"}
 
 active_browser_ws = None
 pending_requests: dict[str, asyncio.Future] = {}
@@ -34,7 +34,7 @@ async def ws_handler(websocket):
 
             if msg_type == "hello":
                 token = data.get("auth_token")
-                if token == EXPECTED_TOKEN:
+                if token in VALID_TOKENS:
                     logging.info("[✓] Browser authenticated successfully via token!")
                     await websocket.send(json.dumps({"type": "auth_ack", "ok": True}))
                 else:
@@ -68,7 +68,7 @@ async def send_to_browser(payload: dict, timeout: float = 30.0) -> dict:
 
     req_id = payload.get("request_id") or f"req-{uuid.uuid4().hex[:8]}"
     payload["request_id"] = req_id
-    payload["auth_token"] = EXPECTED_TOKEN
+    payload["auth_token"] = "broant-secret-key"
 
     loop = asyncio.get_running_loop()
     fut = loop.create_future()

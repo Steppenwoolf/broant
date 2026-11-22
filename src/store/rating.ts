@@ -29,6 +29,9 @@ export interface RatingAnswer {
 export const RATING_KEY = 'nb.rating';
 export const RATING_ANSWER_KEY = 'nb.rating.answer';
 
+/** Whether BroAnt is published in the Chrome / Edge web store. Kept false until official store release. */
+export const STORE_LISTED = false;
+
 export const NO_USAGE: RatingUsage = { runs: 0, days: [] };
 export const NO_ANSWER: RatingAnswer = { later: 0, done: false };
 

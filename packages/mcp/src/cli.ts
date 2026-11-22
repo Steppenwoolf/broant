@@ -119,8 +119,10 @@ async function main() {
 
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
-  process.stdin.on('close', () => void shutdown('stdin:close'));
-  process.stdin.on('end', () => void shutdown('stdin:end'));
+  if (!process.env.BROANT_STANDALONE) {
+    process.stdin.on('close', () => void shutdown('stdin:close'));
+    process.stdin.on('end', () => void shutdown('stdin:end'));
+  }
 
   try {
     await hub.start();

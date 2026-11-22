@@ -5,6 +5,7 @@ import { useState } from 'react';
 import {
   NO_ANSWER,
   NO_USAGE,
+  STORE_LISTED,
   answerRating,
   ratingAnswerStorage,
   ratingShowsIn,
@@ -29,6 +30,7 @@ export function useRatingCard(
   active: boolean,
   waiting: boolean,
 ): boolean {
+  if (!STORE_LISTED) return false;
   // When the panel began showing this conversation: on opening, and again on every switch to another one.
   const [shown, setShown] = useState(() => ({ conversationId, at: Date.now() }));
   if (shown.conversationId !== conversationId) setShown({ conversationId, at: Date.now() });
