@@ -10,6 +10,7 @@ import { setUninstallPage } from './uninstall';
 import { openWhatsNew } from '@src/store/whats-new';
 import { WHATS_NEW, releaseOf } from '@src/ui/whats-new';
 import { DATA_REQUEST } from '@src/ui/protocol';
+import { settingsStorage } from '@src/store/settings';
 import { initAgentBridge, bridgeDispatcher } from '@src/bridge';
 import { initRailHub } from './rail-hub';
 
@@ -62,3 +63,10 @@ void upgradeFromOldVersion().catch(error => console.error('[upgrade] move failed
 void analyticsReady();
 listenForSwitches();
 setUninstallPage();
+
+// Session-only arming: Agent Bridge must strictly default to OFF on browser startup for security.
+if (typeof chrome !== 'undefined' && chrome.runtime?.onStartup) {
+  chrome.runtime.onStartup.addListener(() => {
+    void settingsStorage.set(s => ({ ...s, bridgeEnabled: false }));
+  });
+}
