@@ -1,5 +1,6 @@
 // src/extension/lifecycle.ts
 import { bridgeActivityStore } from '@src/store/bridge-activity';
+import { settingsStorage } from '@src/store/settings';
 
 export type BroAntMode = 'off' | 'panel' | 'rail';
 
@@ -248,6 +249,7 @@ export class BroAntLifecycleController {
       Promise.resolve(this.deps.stopAllLocalRuns()),
       Promise.resolve(this.deps.stopAllBridgeActivity()),
       Promise.resolve(this.deps.suspendBridge()),
+      Promise.resolve(settingsStorage.set(s => ({ ...s, bridgeEnabled: false }))),
     ]);
     bridgeActivityStore.reset();
   }

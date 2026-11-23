@@ -13,8 +13,9 @@ export function initAgentBridge(runManager: RunManager): BridgeClient {
 
     void settingsStorage.get().then(settings => {
       if (bridgeClient) {
+        // Enforce session-only arming: strictly default to false on startup for security
         void bridgeClient.init({
-          enabled: settings.bridgeEnabled,
+          enabled: false,
           serverUrl: settings.bridgeServerUrl,
           authToken: settings.bridgeAuthToken,
         });

@@ -77,7 +77,9 @@ void analyticsReady();
 listenForSwitches();
 setUninstallPage();
 
-// Session-only arming: Agent Bridge must strictly default to OFF on browser startup for security.
+// Session-only arming: Agent Bridge must strictly default to OFF on worker startup for security.
+void settingsStorage.set(s => ({ ...s, bridgeEnabled: false }));
+
 if (typeof chrome !== 'undefined' && chrome.runtime?.onStartup) {
   chrome.runtime.onStartup.addListener(() => {
     void settingsStorage.set(s => ({ ...s, bridgeEnabled: false }));
