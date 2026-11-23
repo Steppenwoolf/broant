@@ -26,6 +26,34 @@ export class BridgeClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private isConnecting = false;
   private isAuthenticated = false;
+  private poweredOn = false;
+
+  suspend() {
+    this.poweredOn = false;
+    this.isConnecting = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.keepAlive.stopAll();
+    if (this.ws) {
+      try {
+        this.ws.close(1000, 'BroAnt powered off');
+      } catch {
+        /* ignore */
+      }
+      this.ws = null;
+    }
+    void bridgeConnectedStorage.set(false);
+  }
+
+  resume() {
+    this.poweredOn = true;
+    this.keepAlive.startWatchdog();
+    if (this.config.enabled) {
+      this.connect();
+    }
+  }
 
   constructor() {
     this.keepAlive = new KeepAliveManager(
@@ -100,6 +128,7 @@ export class BridgeClient {
   }
 
   checkConnection() {
+    if (!this.poweredOn) return;
     if (this.config.enabled && !this.isConnected() && !this.isConnecting) {
       this.connect();
     }
@@ -110,6 +139,7 @@ export class BridgeClient {
   }
 
   connect() {
+    if (!this.poweredOn) return;
     if (!this.config.enabled || this.isConnecting || this.isConnected()) return;
 
     if (!isLoopbackUrl(this.config.serverUrl)) {

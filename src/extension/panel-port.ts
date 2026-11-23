@@ -4,6 +4,7 @@ import { PANEL_PORT_NAME } from '@src/ui/protocol';
 import type { PanelCommand, PanelEvent } from '@src/ui/protocol';
 import type { PanelConnection, RunManager } from './run-manager';
 import { observeCommand } from './analytics';
+import { broantLifecycle } from './lifecycle';
 
 export function listenForPanels(manager: RunManager): void {
   const panelUrl = chrome.runtime.getURL('/sidepanel.html');
@@ -13,6 +14,7 @@ export function listenForPanels(manager: RunManager): void {
       port.disconnect();
       return;
     }
+    broantLifecycle.registerPanelPort(port);
     let open = true;
     const connection: PanelConnection = {
       tabId: null,

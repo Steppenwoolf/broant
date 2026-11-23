@@ -40,4 +40,15 @@ export class KeepAliveManager {
       this.pingTimer = null;
     }
   }
+
+  stopAll() {
+    this.stopHeartbeat();
+    if (typeof chrome !== 'undefined' && chrome.alarms) {
+      void chrome.alarms.clear(ALARM_NAME);
+    }
+  }
+
+  startWatchdog() {
+    this.setupAlarm();
+  }
 }

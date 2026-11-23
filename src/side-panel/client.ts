@@ -15,7 +15,11 @@ export class PanelClient {
   #connect(): chrome.runtime.Port {
     if (this.#port) return this.#port;
     const port = chrome.runtime.connect({ name: PANEL_PORT_NAME });
-    port.onMessage.addListener((event: PanelEvent) => {
+    port.onMessage.addListener((event: any) => {
+      if (event?.type === 'broant_force_close') {
+        window.close();
+        return;
+      }
       if (event.type === 'bound') {
         this.#subscription = { tabId: this.tabId, conversationId: event.conversationId };
         this.#lastSeq = undefined;

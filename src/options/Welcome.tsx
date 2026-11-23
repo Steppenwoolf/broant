@@ -1,4 +1,4 @@
-// The first run: the welcome page, opened when the extension is installed. Three steps: what Nanobrowser does with a
+// The first run: the welcome page, opened when the extension is installed. Three steps: what BroAnt does with a
 // coach mark for Chrome's pin button; choosing a model (local or cloud, or Set it later); and three tips for safe use,
 // with a row that allows the browser features.
 // It uses Settings' type and cards, with the logo above the title.

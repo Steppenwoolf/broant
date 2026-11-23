@@ -67,6 +67,7 @@ import type { Sink } from './journal';
 import { livePair, ModelUnavailable, resolveModel } from './models';
 import { count, deleteKeepingChoices, noteActivity, observe, runEnded, runModel, runStarted } from './analytics';
 import { endOf } from './analytics-payload';
+import { bridgeActivityStore } from '@src/store/bridge-activity';
 
 export interface PanelConnection {
   tabId: number | null;
@@ -207,6 +208,10 @@ export class RunManager {
     }
   }
 
+  stopAllLocalRuns(): void {
+    this.stop();
+  }
+
   #conversationOfSessionTab(tabId: number): string | null {
     for (const [conversationId, session] of this.#sessions) if (session.hasTab(tabId)) return conversationId;
     return null;
@@ -318,6 +323,9 @@ export class RunManager {
   emit(conversationId: string, body: PanelEventBody): void {
     this.journal.emit(conversationId, body);
     observe(body);
+    if (body.type === 'tool_call' && (body as { tool?: string }).tool) {
+      bridgeActivityStore.update({ currentTool: (body as { tool?: string }).tool });
+    }
   }
 
   /**
@@ -1369,6 +1377,7 @@ export class RunManager {
         this.#runs.delete(conversationId);
         this.#records.delete(conversationId);
         this.broker.withdrawAll(conversationId);
+        bridgeActivityStore.update({ activeLocalRuns: this.#runs.size });
         // When a run ends the debugger is detached; the next run attaches again and starts fresh.
         await this.#closeSession(conversationId);
         // A message queued as the run was ending is sent now, as the next message. Stop gave the queue back already.
@@ -1378,6 +1387,10 @@ export class RunManager {
       }
     })();
     this.#runs.set(conversationId, { runId, controller, done });
+    bridgeActivityStore.update({
+      activeLocalRuns: this.#runs.size,
+      currentTool: 'thinking',
+    });
     void this.#watchdog();
     void done.then(() => this.#watchdog());
   }

@@ -3,7 +3,7 @@
 // quick theme toggle, and Collapse to Rail action.
 
 import { useEffect, useState } from 'react';
-import { HistoryIcon, LogoMark, MoonIcon, NewChatIcon, SettingsIcon, SunIcon } from '@src/ui/icons';
+import { CloseIcon, HistoryIcon, LogoMark, MoonIcon, NewChatIcon, SettingsIcon, SunIcon } from '@src/ui/icons';
 import { websiteUrl } from '@src/ui/links';
 import { t } from '@src/ui/i18n';
 import { applyTheme } from '@src/ui/theme';
@@ -89,12 +89,22 @@ export function TelemetryHeader({
     }
   };
 
-  const handleCollapse = () => {
+  const handleMinimize = async () => {
+    try {
+      await chrome.runtime.sendMessage({ type: 'broant_lifecycle', command: 'minimize_to_rail' });
+    } catch {}
     if (onCollapse) {
       onCollapse();
     } else {
       window.close();
     }
+  };
+
+  const handlePowerOff = async () => {
+    try {
+      await chrome.runtime.sendMessage({ type: 'broant_lifecycle', command: 'power_off' });
+    } catch {}
+    window.close();
   };
 
   const percent = Math.min(100, Math.round((usedTokens / maxTokens) * 100));
@@ -105,13 +115,13 @@ export function TelemetryHeader({
 
   return (
     <header className="relative flex h-11 shrink-0 items-center justify-between border-b border-ba-border/60 bg-ba-bg px-2">
-      {/* Left: Brand mark and two-tone BroAnt typography — symmetric toggle to collapse back to rail */}
+      {/* Left: Brand mark and two-tone BroAnt typography — symmetric toggle to minimize back to rail */}
       <div className="flex items-center gap-1.5">
         <button
           type="button"
-          onClick={handleCollapse}
-          title="Collapse to Rail"
-          aria-label="Collapse to Rail"
+          onClick={handleMinimize}
+          title="Minimize to Rail"
+          aria-label="Minimize to Rail"
           className="group flex items-center gap-1.5 p-0.5 rounded transition-transform hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-accent">
           <LogoMark size={28} />
           <span className="flex items-baseline text-[14px] font-bold tracking-tight select-none">
@@ -242,14 +252,24 @@ export function TelemetryHeader({
           <SettingsIcon size={15} />
         </button>
 
-        {/* Collapse into Rail Button */}
+        {/* Minimize into Rail Button */}
         <button
           type="button"
-          onClick={handleCollapse}
-          title="Collapse to Rail"
-          aria-label="Collapse to Rail"
+          onClick={handleMinimize}
+          title="Minimize to Rail"
+          aria-label="Minimize to Rail"
           className="flex size-7 items-center justify-center rounded-lg text-ba-muted transition-colors hover:bg-ba-surface hover:text-ba-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-accent">
           <CollapseRailIcon size={15} />
+        </button>
+
+        {/* Power Off BroAnt Button */}
+        <button
+          type="button"
+          onClick={handlePowerOff}
+          title="Power Off BroAnt (Stops MCP & Agents)"
+          aria-label="Power Off BroAnt"
+          className="flex size-7 items-center justify-center rounded-lg text-ba-muted transition-colors hover:bg-ba-danger/20 hover:text-ba-danger focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-danger">
+          <CloseIcon size={15} />
         </button>
       </div>
 

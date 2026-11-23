@@ -11,14 +11,27 @@ import { openWhatsNew } from '@src/store/whats-new';
 import { WHATS_NEW, releaseOf } from '@src/ui/whats-new';
 import { DATA_REQUEST } from '@src/ui/protocol';
 import { settingsStorage } from '@src/store/settings';
-import { initAgentBridge, bridgeDispatcher } from '@src/bridge';
+import { initAgentBridge, bridgeDispatcher, bridgeClient } from '@src/bridge';
 import { initRailHub } from './rail-hub';
+import { broantLifecycle } from './lifecycle';
 
 export const runManager = new RunManager();
 listenForPanels(runManager);
 listenForSelections(runManager);
 initAgentBridge(runManager);
-initRailHub(() => bridgeDispatcher);
+
+const railHub = initRailHub({
+  getDispatcher: () => bridgeDispatcher,
+  stopAllLocalRuns: () => runManager.stopAllLocalRuns(),
+});
+
+broantLifecycle.init({
+  suspendBridge: () => bridgeClient?.suspend(),
+  resumeBridgeIfAllowed: () => bridgeClient?.resume(),
+  stopAllLocalRuns: () => runManager.stopAllLocalRuns(),
+  stopAllBridgeActivity: () => bridgeDispatcher?.killAllActivity(),
+  onStateChange: () => void railHub.broadcast(),
+});
 // The watchdog alarm only wakes the worker; starting it is what restores an unfinished run.
 // The welcome page and the first shortcut on install. Unattended check builds are installed on every run, so they
 // skip both.

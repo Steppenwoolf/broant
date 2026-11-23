@@ -2,53 +2,72 @@
 import { bridgeActivityStore } from '@src/store/bridge-activity';
 import { DEFAULT_SETTINGS, bridgeConnectedStorage, settingsStorage } from '@src/store/settings';
 import type { BridgeDispatcher } from '@src/bridge/dispatcher';
-import { PANEL_PORT_NAME } from '@src/ui/protocol';
-import { openPanel, closePanel } from './panel';
+import { broantLifecycle } from './lifecycle';
 
-export function initRailHub(getDispatcher: () => BridgeDispatcher | null) {
-  const ports = new Set<chrome.runtime.Port>();
-  const sidePanelPorts = new Set<chrome.runtime.Port>();
+export interface RailHubDeps {
+  getDispatcher: () => BridgeDispatcher | null;
+  stopAllLocalRuns: () => Promise<void> | void;
+}
 
-  async function isSidePanelOpen(): Promise<boolean> {
-    if (sidePanelPorts.size > 0) return true;
-    if (typeof chrome !== 'undefined' && chrome.runtime?.getContexts) {
-      try {
-        const contexts = await chrome.runtime.getContexts({
-          contextTypes: ['SIDE_PANEL' as any],
-        });
-        return contexts.length > 0;
-      } catch {
-        // fallback
-      }
-    }
+async function isNormalBrowserTab(sender?: chrome.runtime.MessageSender): Promise<boolean> {
+  const tab = sender?.tab;
+  if (!tab || typeof tab.id !== 'number' || tab.id < 0) return false;
+  if (typeof tab.windowId !== 'number' || tab.windowId < 0) return false;
+
+  try {
+    const [realTab, win] = await Promise.all([
+      chrome.tabs.get(tab.id),
+      chrome.windows.get(tab.windowId),
+    ]);
+    if (!realTab || !win || win.type !== 'normal') return false;
+    const windowTabs = await chrome.tabs.query({ windowId: win.id });
+    return windowTabs.some(t => t.id === realTab.id);
+  } catch {
     return false;
   }
+}
 
-  async function buildSnapshot() {
+export function initRailHub(deps: RailHubDeps): { broadcast: () => Promise<void> } {
+  // Store tabId -> Set<Port> to show Mini-Rail EXCLUSIVELY on anchorTabId
+  const ports = new Map<chrome.runtime.Port, number>();
+
+  async function buildBaseSnapshot() {
     const settings = await settingsStorage.get().catch(() => DEFAULT_SETTINGS);
     const connected = await bridgeConnectedStorage.get().catch(() => false);
-    const sidePanelOpen = await isSidePanelOpen();
     const theme = settings.theme === 'light' ? 'light' : 'dark';
     return {
-      visible: settings.showMiniRail ?? true,
-      opacity: settings.miniRailOpacity ?? 0.85,
-      sidePanelOpen,
       theme,
       bridgeEnabled: Boolean(settings.bridgeEnabled),
       bridgeConnected: Boolean(connected),
-      pruningMode: settings.domPruningMode ?? 'compact',
-      vramLoaded: Boolean(settings.loadedModelName),
-      vramLabel: settings.loadedModelName ? `VRAM: ${settings.loadedModelName}` : 'LM Studio: idle',
+      pruningMode: (settings as { domPruningMode?: 'compact' | 'standard' }).domPruningMode ?? 'compact',
+      vramLoaded: Boolean((settings as { loadedModelName?: string }).loadedModelName),
+      vramLabel: (settings as { loadedModelName?: string }).loadedModelName
+        ? `VRAM: ${(settings as { loadedModelName?: string }).loadedModelName}`
+        : 'LM Studio: idle',
+      topPx: (settings as { miniRailTopPx?: number }).miniRailTopPx ?? 14,
       activity: bridgeActivityStore.get(),
     };
   }
 
+  async function pushToPort(port: chrome.runtime.Port, tabId: number) {
+    const lc = broantLifecycle.getState();
+    const visible = lc.mode === 'rail' && lc.anchorTabId === tabId;
+    const base = await buildBaseSnapshot();
+    try {
+      port.postMessage({ type: 'rail_state', state: { ...base, visible } });
+    } catch {
+      ports.delete(port);
+    }
+  }
+
   async function broadcast() {
     if (ports.size === 0) return;
-    const state = await buildSnapshot();
-    for (const port of Array.from(ports)) {
+    const lc = broantLifecycle.getState();
+    const base = await buildBaseSnapshot();
+    for (const [port, tabId] of ports.entries()) {
+      const visible = lc.mode === 'rail' && lc.anchorTabId === tabId;
       try {
-        port.postMessage({ type: 'rail_state', state });
+        port.postMessage({ type: 'rail_state', state: { ...base, visible } });
       } catch {
         ports.delete(port);
       }
@@ -57,27 +76,23 @@ export function initRailHub(getDispatcher: () => BridgeDispatcher | null) {
 
   if (typeof chrome !== 'undefined' && chrome.runtime?.onConnect) {
     chrome.runtime.onConnect.addListener(port => {
-      if (port.name === PANEL_PORT_NAME) {
-        sidePanelPorts.add(port);
-        void broadcast();
-        port.onDisconnect.addListener(() => {
-          sidePanelPorts.delete(port);
-          void broadcast();
-        });
-        return;
-      }
-
       if (port.name !== 'broant-rail') return;
-      ports.add(port);
-      void buildSnapshot().then(state => {
-        try {
-          port.postMessage({ type: 'rail_state', state });
-        } catch {
-          ports.delete(port);
+      void isNormalBrowserTab(port.sender).then(eligible => {
+        if (!eligible || typeof port.sender?.tab?.id !== 'number') {
+          try {
+            port.postMessage({ type: 'rail_unmount' });
+          } catch {
+            // ignore
+          }
+          port.disconnect();
+          return;
         }
-      });
-      port.onDisconnect.addListener(() => {
-        ports.delete(port);
+        const tabId = port.sender.tab.id;
+        ports.set(port, tabId);
+        void pushToPort(port, tabId);
+        port.onDisconnect.addListener(() => {
+          ports.delete(port);
+        });
       });
     });
   }
@@ -100,22 +115,13 @@ export function initRailHub(getDispatcher: () => BridgeDispatcher | null) {
       const action = msg.action as string;
 
       if (action === 'open_sidepanel' || action === 'open_routines') {
-        const tabId = sender.tab?.id;
-        const windowId = sender.tab?.windowId;
-        if (tabId !== undefined) {
-          openPanel(tabId);
-        } else if (windowId !== undefined && chrome.sidePanel?.open) {
-          void chrome.sidePanel.open({ windowId }).catch(() => undefined);
-        }
+        broantLifecycle.expandFromRailSync(sender.tab);
         sendResponse({ ok: true });
         return false;
       }
 
-      if (action === 'close_sidepanel') {
-        const tabId = sender.tab?.id;
-        if (tabId !== undefined) {
-          closePanel(tabId);
-        }
+      if (action === 'power_off') {
+        void broantLifecycle.powerOff('rail_close_button');
         sendResponse({ ok: true });
         return false;
       }
@@ -135,14 +141,27 @@ export function initRailHub(getDispatcher: () => BridgeDispatcher | null) {
       if (action === 'toggle_pruning') {
         void settingsStorage.set(s => ({
           ...s,
-          domPruningMode: s.domPruningMode === 'compact' ? 'standard' : 'compact',
+          domPruningMode:
+            (s as { domPruningMode?: string }).domPruningMode === 'compact' ? 'standard' : 'compact',
         }));
         sendResponse({ ok: true });
         return false;
       }
 
+      if (action === 'save_rail_top' && typeof msg.topPx === 'number') {
+        const clamped = Math.max(8, Math.min(Math.round(msg.topPx), 900));
+        void settingsStorage.set(s => ({ ...s, miniRailTopPx: clamped }));
+        sendResponse({ ok: true });
+        return false;
+      }
+
       if (action === 'kill_all') {
-        void getDispatcher()?.killAllActivity();
+        void Promise.allSettled([
+          Promise.resolve(deps.stopAllLocalRuns()),
+          Promise.resolve(deps.getDispatcher()?.killAllActivity()),
+        ]).then(() => {
+          bridgeActivityStore.reset();
+        });
         sendResponse({ ok: true });
         return false;
       }
@@ -150,4 +169,6 @@ export function initRailHub(getDispatcher: () => BridgeDispatcher | null) {
       return false;
     });
   }
+
+  return { broadcast };
 }

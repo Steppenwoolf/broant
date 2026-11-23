@@ -1,12 +1,14 @@
 // src/store/bridge-activity.ts
-// Live bridge activity state store in chrome.storage.session (RAM-backed, zero disk wear).
-
 export type BridgeActivityPhase = 'idle' | 'held' | 'executing';
+export type ActivitySource = 'mcp' | 'local' | 'both' | 'none';
 
 export interface BridgeActivityState {
   phase: BridgeActivityPhase;
+  source: ActivitySource;
   activeSessions: number;
   activeTasks: number;
+  activeLocalRuns: number;
+  mcpExecuting: boolean;
   currentTool?: string;
   activeTabId?: number;
   updatedAt: number;
@@ -14,8 +16,11 @@ export interface BridgeActivityState {
 
 export const INITIAL_BRIDGE_ACTIVITY: BridgeActivityState = {
   phase: 'idle',
+  source: 'none',
   activeSessions: 0,
   activeTasks: 0,
+  activeLocalRuns: 0,
+  mcpExecuting: false,
   updatedAt: 0,
 };
 
@@ -28,7 +33,7 @@ class BridgeActivityStore {
 
   constructor() {
     if (typeof chrome !== 'undefined' && chrome.storage?.session) {
-      chrome.storage.session.get([STORAGE_KEY]).then(res => {
+      void chrome.storage.session.get([STORAGE_KEY]).then(res => {
         if (res && res[STORAGE_KEY]) {
           this.state = { ...this.state, ...res[STORAGE_KEY] };
         }
@@ -46,35 +51,50 @@ class BridgeActivityStore {
   }
 
   update(patch: Partial<BridgeActivityState>): BridgeActivityState {
-    const next: BridgeActivityState = {
+    const merged: BridgeActivityState = {
       ...this.state,
       ...patch,
       updatedAt: Date.now(),
     };
-    if (next.activeSessions <= 0 && next.activeTasks <= 0) {
-      next.phase = 'idle';
-      next.currentTool = undefined;
-      next.activeTabId = undefined;
+
+    const hasLocal = merged.activeLocalRuns > 0;
+    const hasMcp = merged.activeSessions > 0 || merged.activeTasks > 0 || merged.mcpExecuting;
+
+    merged.source = hasLocal && hasMcp ? 'both' : hasLocal ? 'local' : hasMcp ? 'mcp' : 'none';
+
+    if (hasLocal || merged.mcpExecuting || merged.activeTasks > 0) {
+      merged.phase = 'executing';
+    } else if (merged.activeSessions > 0) {
+      merged.phase = 'held';
+    } else {
+      merged.phase = 'idle';
+      merged.currentTool = undefined;
+      merged.activeTabId = undefined;
     }
-    this.state = next;
+
+    this.state = merged;
     if (typeof chrome !== 'undefined' && chrome.storage?.session) {
-      void chrome.storage.session.set({ [STORAGE_KEY]: next }).catch(() => undefined);
+      void chrome.storage.session.set({ [STORAGE_KEY]: merged }).catch(() => undefined);
     }
+
     for (const fn of this.listeners) {
       try {
-        fn(next);
+        fn(merged);
       } catch {
-        // ignore listener errors
+        // ignore
       }
     }
-    return next;
+    return merged;
   }
 
   reset(): BridgeActivityState {
     return this.update({
       phase: 'idle',
+      source: 'none',
       activeSessions: 0,
       activeTasks: 0,
+      activeLocalRuns: 0,
+      mcpExecuting: false,
       currentTool: undefined,
       activeTabId: undefined,
     });

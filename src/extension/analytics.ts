@@ -358,19 +358,9 @@ async function sendQueue(): Promise<void> {
   });
 }
 
-/** One event to the destination. */
-async function post(body: SentEvent): Promise<boolean> {
-  if (!DESTINATION) return false;
-  try {
-    const response = await fetch(DESTINATION.url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ api_key: DESTINATION.key, ...body }),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
+/** One event to the destination (no-op in BroAnt: all telemetry stays local). */
+async function post(_body: SentEvent): Promise<boolean> {
+  return true;
 }
 
 const uuid = () => crypto.randomUUID();
