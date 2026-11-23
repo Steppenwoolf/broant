@@ -48,8 +48,7 @@ export default defineConfig({
     },
     'build:manifestGenerated': (_wxt, manifest) => {
       if (manifest.background) (manifest.background as { type?: string }).type = 'module';
-      // No panel by default: the worker enables it per tab with a path.
-      delete (manifest as { side_panel?: unknown }).side_panel;
+      (manifest as { side_panel?: unknown }).side_panel = { default_path: 'sidepanel.html' };
     },
   },
   vite: env => ({

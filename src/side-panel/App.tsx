@@ -398,9 +398,6 @@ export function App() {
           try {
             window.close();
           } catch {}
-          if (client?.tabId && typeof chrome !== 'undefined' && chrome.sidePanel?.setOptions) {
-            void chrome.sidePanel.setOptions({ tabId: client.tabId, enabled: false }).catch(() => undefined);
-          }
         }}
       />
       {confirmNewChat ? (

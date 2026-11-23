@@ -130,12 +130,15 @@ const RAIL_CSS = `
   border-right: none;
   cursor: pointer;
   justify-content: center;
+  align-items: center;
   gap: 4px;
+  overflow: hidden !important;
 }
-.dock.tucked > :not(.tuck-dot),
-.dock.tucked .btn,
-.dock.tucked #ba-open {
+.dock.tucked > * {
   display: none !important;
+}
+.dock.tucked > .tuck-dot {
+  display: block !important;
 }
 .tuck-dot {
   display: none;

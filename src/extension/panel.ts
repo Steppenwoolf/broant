@@ -17,10 +17,6 @@ export function closePanel(tabId: number): void {
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => undefined);
 
-chrome.action.onClicked.addListener(tab => {
-  if (tab.id !== undefined) openPanel(tab.id);
-});
-
 chrome.commands.onCommand.addListener((command, tab) => {
   if (tab?.id === undefined) return;
   if (command === 'open-panel') openPanel(tab.id);

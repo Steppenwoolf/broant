@@ -136,9 +136,19 @@ export class BroAntLifecycleController {
   /** Synchronous launch on action click (preserves user gesture for sidePanel.open) */
   private launchOnTabSync(tab: chrome.tabs.Tab): void {
     const windowId = tab.windowId;
-    const tabId = typeof tab.id === 'number' && tab.id >= 0 ? tab.id : null;
+    const tabId = typeof tab.id === 'number' && tab.id >= 0 ? tab.id : undefined;
 
-    if (windowId !== undefined && chrome.sidePanel?.open) {
+    if (tabId !== undefined) {
+      void chrome.sidePanel.setOptions({ tabId, path: 'sidepanel.html', enabled: true }).catch(() => undefined);
+      if (chrome.sidePanel?.open) {
+        chrome.sidePanel.open({ tabId }).catch(err => {
+          console.warn('[broant] sidePanel.open({ tabId }) failed, trying windowId:', err);
+          if (windowId !== undefined) {
+            void chrome.sidePanel.open({ windowId }).catch(() => undefined);
+          }
+        });
+      }
+    } else if (windowId !== undefined && chrome.sidePanel?.open) {
       void chrome.sidePanel.open({ windowId }).catch(err => {
         console.warn('[broant] sidePanel.open failed:', err);
       });
@@ -147,7 +157,7 @@ export class BroAntLifecycleController {
     this.pendingMinimize = false;
     this.setState({
       mode: 'panel',
-      anchorTabId: tabId,
+      anchorTabId: tabId ?? null,
       panelWindowId: windowId ?? null,
     });
     void this.deps.resumeBridgeIfAllowed();
@@ -159,6 +169,11 @@ export class BroAntLifecycleController {
     const windowId = tab?.windowId ?? this.state.panelWindowId ?? undefined;
 
     if (!chrome.sidePanel?.open) return;
+
+    if (tabId !== undefined) {
+      void chrome.sidePanel.setOptions({ tabId, path: 'sidepanel.html', enabled: true }).catch(() => undefined);
+    }
+    void chrome.sidePanel.setOptions({ path: 'sidepanel.html', enabled: true }).catch(() => undefined);
 
     const onOpened = () => {
       this.pendingMinimize = false;
