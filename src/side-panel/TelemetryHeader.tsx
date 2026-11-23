@@ -3,7 +3,7 @@
 // quick theme toggle, and Collapse to Rail action.
 
 import { useEffect, useState } from 'react';
-import { CloseIcon, HistoryIcon, LogoMark, MoonIcon, NewChatIcon, SettingsIcon, SunIcon } from '@src/ui/icons';
+import { HistoryIcon, LogoMark, MoonIcon, NewChatIcon, SettingsIcon, SunIcon } from '@src/ui/icons';
 import { websiteUrl } from '@src/ui/links';
 import { t } from '@src/ui/i18n';
 import { applyTheme } from '@src/ui/theme';
@@ -100,13 +100,6 @@ export function TelemetryHeader({
     }
   };
 
-  const handlePowerOff = async () => {
-    try {
-      await chrome.runtime.sendMessage({ type: 'broant_lifecycle', command: 'power_off' });
-    } catch {}
-    window.close();
-  };
-
   const percent = Math.min(100, Math.round((usedTokens / maxTokens) * 100));
   const progressColor =
     percent > 90 ? 'bg-ba-danger' : percent > 75 ? 'bg-ba-honey' : 'bg-ba-accent';
@@ -115,20 +108,15 @@ export function TelemetryHeader({
 
   return (
     <header className="relative flex h-11 shrink-0 items-center justify-between border-b border-ba-border/60 bg-ba-bg px-2">
-      {/* Left: Brand mark and two-tone BroAnt typography — symmetric toggle to minimize back to rail */}
+      {/* Left: Brand mark and two-tone BroAnt typography */}
       <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={handleMinimize}
-          title="Minimize to Rail"
-          aria-label="Minimize to Rail"
-          className="group flex items-center gap-1.5 p-0.5 rounded transition-transform hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-accent">
+        <div className="flex items-center gap-1.5 p-0.5 select-none">
           <LogoMark size={28} />
-          <span className="flex items-baseline text-[14px] font-bold tracking-tight select-none">
+          <span className="flex items-baseline text-[14px] font-bold tracking-tight">
             <span className="text-ba-fg-strong">Bro</span>
             <span className="text-ba-accent">Ant</span>
           </span>
-        </button>
+        </div>
         {usedTokens > 0 ? (
           <span
             title={`Context usage: ${usedTokens.toLocaleString()} / ${maxTokens.toLocaleString()} tokens (${percent}%)`}
@@ -260,16 +248,6 @@ export function TelemetryHeader({
           aria-label="Minimize to Rail"
           className="flex size-7 items-center justify-center rounded-lg text-ba-muted transition-colors hover:bg-ba-surface hover:text-ba-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-accent">
           <CollapseRailIcon size={15} />
-        </button>
-
-        {/* Power Off BroAnt Button */}
-        <button
-          type="button"
-          onClick={handlePowerOff}
-          title="Power Off BroAnt (Stops MCP & Agents)"
-          aria-label="Power Off BroAnt"
-          className="flex size-7 items-center justify-center rounded-lg text-ba-muted transition-colors hover:bg-ba-danger/20 hover:text-ba-danger focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-danger">
-          <CloseIcon size={15} />
         </button>
       </div>
 

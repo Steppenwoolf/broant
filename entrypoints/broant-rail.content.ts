@@ -132,8 +132,10 @@ const RAIL_CSS = `
   justify-content: center;
   gap: 4px;
 }
-.dock.tucked > :not(.tuck-dot) {
-  display: none;
+.dock.tucked > :not(.tuck-dot),
+.dock.tucked .btn,
+.dock.tucked #ba-open {
+  display: none !important;
 }
 .tuck-dot {
   display: none;
@@ -460,19 +462,17 @@ export default defineContentScript({
       }
     });
 
-    let clickTimer: number | null = null;
+    // Double click on dock background toggles tucked state
+    dock.addEventListener('dblclick', e => {
+      if (!(e.target as HTMLElement).closest('.btn')) {
+        dock.classList.toggle('tucked');
+      }
+    });
+
+    // Clicking emblem immediately sends open_sidepanel with active user gesture
     btnOpen.addEventListener('click', e => {
       e.stopPropagation();
-      if (clickTimer !== null) {
-        window.clearTimeout(clickTimer);
-        clickTimer = null;
-        dock.classList.toggle('tucked');
-      } else {
-        clickTimer = window.setTimeout(() => {
-          clickTimer = null;
-          sendAction('open_sidepanel');
-        }, 240);
-      }
+      sendAction('open_sidepanel');
     });
 
     btnMcp.addEventListener('click', () => sendAction('toggle_mcp'));

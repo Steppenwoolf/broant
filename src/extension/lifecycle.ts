@@ -104,6 +104,18 @@ export class BroAntLifecycleController {
   /** Registers live Side Panel port (call in panel-port.ts / onConnect) */
   registerPanelPort(port: chrome.runtime.Port): void {
     this.panelPorts.add(port);
+
+    // When side panel opens (via action click or Opera sidebar), ensure lifecycle state is 'panel'
+    if (this.state.mode !== 'panel') {
+      this.pendingMinimize = false;
+      this.setState({
+        mode: 'panel',
+        anchorTabId: this.state.anchorTabId,
+        panelWindowId: this.state.panelWindowId,
+      });
+      void this.deps.resumeBridgeIfAllowed();
+    }
+
     port.onDisconnect.addListener(() => {
       this.panelPorts.delete(port);
       if (this.panelPorts.size > 0) return;
@@ -114,7 +126,7 @@ export class BroAntLifecycleController {
         return;
       }
 
-      // Otherwise (system or internal × clicked) -> full power off
+      // Otherwise (system or native close button clicked) -> full power off
       if (this.state.mode === 'panel') {
         void this.powerOff('panel_disconnected');
       }
@@ -143,16 +155,32 @@ export class BroAntLifecycleController {
 
   /** Expand full panel on click on mini-rail emblem (synchronous user gesture) */
   expandFromRailSync(tab?: chrome.tabs.Tab): void {
+    const tabId = typeof tab?.id === 'number' && tab.id >= 0 ? tab.id : undefined;
     const windowId = tab?.windowId ?? this.state.panelWindowId ?? undefined;
-    if (windowId !== undefined && chrome.sidePanel?.open) {
-      void chrome.sidePanel.open({ windowId }).catch(() => undefined);
+
+    if (chrome.sidePanel?.open) {
+      const openPromise = tabId !== undefined && windowId !== undefined
+        ? chrome.sidePanel.open({ tabId, windowId })
+        : windowId !== undefined
+          ? chrome.sidePanel.open({ windowId })
+          : tabId !== undefined
+            ? chrome.sidePanel.open({ tabId })
+            : Promise.reject(new Error('No valid tabId or windowId'));
+
+      openPromise
+        .then(() => {
+          this.pendingMinimize = false;
+          this.setState({
+            mode: 'panel',
+            anchorTabId: tabId ?? this.state.anchorTabId,
+            panelWindowId: windowId ?? null,
+          });
+        })
+        .catch(err => {
+          console.warn('[broant] sidePanel.open failed from rail click:', err);
+          // If browser blocked sidePanel.open, keep rail visible rather than hiding it
+        });
     }
-    this.pendingMinimize = false;
-    this.setState({
-      mode: 'panel',
-      anchorTabId: tab?.id ?? this.state.anchorTabId,
-      panelWindowId: windowId ?? null,
-    });
   }
 
   /** Explicitly minimize to Mini-Rail ONLY on one tab */
@@ -210,16 +238,8 @@ export class BroAntLifecycleController {
 
   private updateToolbarBadge(): void {
     if (!chrome.action?.setBadgeText) return;
-    if (this.state.mode === 'off') {
-      void chrome.action.setBadgeText({ text: '' });
-      return;
-    }
-    void chrome.action.setBadgeText({
-      text: this.state.mode === 'rail' ? 'RAIL' : 'ON',
-    });
-    void chrome.action.setBadgeBackgroundColor({
-      color: this.state.mode === 'rail' ? '#D97706' : '#C85A32',
-    });
+    // Clear static badges so toolbar icon remains clean in Opera / Chrome
+    void chrome.action.setBadgeText({ text: '' });
   }
 }
 
