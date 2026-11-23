@@ -44,6 +44,7 @@ export function ModelMenu({
   onReasoning,
   preferLoaded,
   onPreferLoaded,
+  onRefreshLoadedModel,
   activeLoadedModelName,
 }: {
   models: ModelChoice[];
@@ -55,6 +56,7 @@ export function ModelMenu({
   onReasoning: (reasoning: ReasoningEffort) => void;
   preferLoaded?: boolean;
   onPreferLoaded?: (prefer: boolean) => void;
+  onRefreshLoadedModel?: () => void;
   activeLoadedModelName?: string | null;
 }) {
   const [open, setOpen] = useState(false);
@@ -68,13 +70,16 @@ export function ModelMenu({
 
   useEffect(() => {
     if (!open) return;
+    if (preferLoaded) {
+      onRefreshLoadedModel?.();
+    }
     root.current?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]')?.focus();
     const outside = (e: PointerEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener('pointerdown', outside);
     return () => document.removeEventListener('pointerdown', outside);
-  }, [open]);
+  }, [open, preferLoaded, onRefreshLoadedModel]);
 
   const close = () => {
     setOpen(false);
@@ -99,7 +104,7 @@ export function ModelMenu({
         aria-expanded={open}
         data-label={t('composer.model')}
         data-value={model ? valueOf(model) : ''}
-        className="flex min-w-[80px] max-w-[130px] items-center gap-1 whitespace-nowrap rounded-full border border-ba-border/60 bg-ba-surface px-2.5 py-1 text-xs font-medium text-ba-fg transition-colors hover:border-ba-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ba-accent/40 disabled:opacity-40"
+        className="flex min-w-0 max-w-[120px] items-center gap-1 whitespace-nowrap rounded-full border border-ba-border/60 bg-ba-surface px-1.5 py-0.5 text-xs font-medium text-ba-fg transition-colors hover:border-ba-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ba-accent/40 disabled:opacity-40"
         onClick={() => setOpen(o => !o)}>
         <span className="truncate">{label}</span>
         {/* In a narrow panel the effort goes first, then the name is cut. */}
@@ -147,7 +152,11 @@ export function ModelMenu({
                 <input
                   type="checkbox"
                   checked={preferLoaded}
-                  onChange={e => onPreferLoaded(e.target.checked)}
+                  onChange={e => {
+                    const next = e.target.checked;
+                    onPreferLoaded(next);
+                    if (next) onRefreshLoadedModel?.();
+                  }}
                   className="size-3.5 rounded border-ba-border text-ba-honey focus:ring-ba-honey/40 accent-ba-honey cursor-pointer"
                 />
                 <span className="font-medium">{t('composer.preferLoaded')}</span>

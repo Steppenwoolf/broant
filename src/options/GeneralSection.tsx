@@ -149,6 +149,55 @@ export function GeneralSection() {
             onChange={on => void settingsStorage.set(s => ({ ...s, pageBorder: on }))}
           />
         </SettingsRow>
+        <SettingsRow
+          label="Mini-Rail Floating Dock"
+          description="Show compact floating status dock with LED indicators and quick controls on web pages">
+          <Switch
+            aria-label="Mini-Rail Floating Dock"
+            checked={settings.showMiniRail ?? true}
+            onChange={on => void settingsStorage.set(s => ({ ...s, showMiniRail: on }))}
+          />
+        </SettingsRow>
+        {settings.showMiniRail ?? true ? (
+          <SettingsRow
+            label="Mini-Rail Opacity"
+            description="Adjust transparency of the floating dock on web pages (20% to 100%)">
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min="20"
+                max="100"
+                step="5"
+                value={Math.round((settings.miniRailOpacity ?? 0.85) * 100)}
+                onChange={e => {
+                  const val = Number(e.target.value) / 100;
+                  void settingsStorage.set(s => ({ ...s, miniRailOpacity: val }));
+                }}
+                className="w-36 h-2 rounded-lg bg-ba-border accent-ba-accent cursor-pointer"
+                aria-label="Mini-Rail Opacity Slider"
+              />
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="number"
+                  min={20}
+                  max={100}
+                  step={5}
+                  value={Math.round((settings.miniRailOpacity ?? 0.85) * 100)}
+                  onChange={e => {
+                    const num = Math.round(Number(e.target.value));
+                    if (Number.isFinite(num)) {
+                      const clamped = Math.min(100, Math.max(20, num));
+                      void settingsStorage.set(s => ({ ...s, miniRailOpacity: clamped / 100 }));
+                    }
+                  }}
+                  className="w-16 text-center font-mono text-sm py-1"
+                  aria-label="Mini-Rail Opacity Input"
+                />
+                <span className="text-sm font-medium text-ba-muted">%</span>
+              </div>
+            </div>
+          </SettingsRow>
+        ) : null}
       </SettingsCard>
       <KeyboardShortcut />
     </div>

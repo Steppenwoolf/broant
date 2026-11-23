@@ -200,31 +200,29 @@ export function App() {
   );
 
   const [activeLoadedModelName, setActiveLoadedModelName] = useState<string | null>(null);
-  useEffect(() => {
+
+  const refreshLoadedModel = useCallback(() => {
+    if (!settings.preferLoadedModel) {
+      setActiveLoadedModelName(null);
+      return;
+    }
     const localProvider = providers.find(p => p.kind === 'lmstudio' || p.kind === 'ollama');
     if (!localProvider) {
       setActiveLoadedModelName(null);
       return;
     }
-    let cancelled = false;
-    const checkLoaded = () => {
-      detectActiveLoadedModel({ kind: localProvider.kind, baseUrl: localProvider.baseUrl })
-        .then(active => {
-          if (!cancelled) setActiveLoadedModelName(active?.modelName ?? null);
-        })
-        .catch(() => {
-          if (!cancelled) setActiveLoadedModelName(null);
-        });
-    };
-    checkLoaded();
-    const timer = setInterval(checkLoaded, 5_000);
-    window.addEventListener('focus', checkLoaded);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-      window.removeEventListener('focus', checkLoaded);
-    };
-  }, [providers]);
+    detectActiveLoadedModel({ kind: localProvider.kind, baseUrl: localProvider.baseUrl })
+      .then(active => setActiveLoadedModelName(active?.modelName ?? null))
+      .catch(() => setActiveLoadedModelName(null));
+  }, [providers, settings.preferLoadedModel]);
+
+  useEffect(() => {
+    if (settings.preferLoadedModel) {
+      refreshLoadedModel();
+    } else {
+      setActiveLoadedModelName(null);
+    }
+  }, [settings.preferLoadedModel, refreshLoadedModel]);
 
   const conversation = state.conversation;
   const mode: PermissionMode = conversation?.mode ?? draftMode ?? settings.defaultMode;
@@ -440,9 +438,17 @@ export function App() {
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-            {state.loaded ? <LogoMark size={40} /> : null}
             {state.loaded ? (
-              <p className="max-w-xs text-[24px] font-normal leading-tight text-nb-fg">{t('panel.empty')}</p>
+              <img
+                src="/brand/logo.png"
+                alt="BroAnt"
+                width={76}
+                height={76}
+                className="mb-2 shrink-0 rounded-2xl shadow-md transition-transform duration-200 hover:scale-105"
+              />
+            ) : null}
+            {state.loaded ? (
+              <p className="max-w-xs text-[26px] font-semibold tracking-tight text-ba-fg-strong">{t('panel.empty')}</p>
             ) : (
               <p className="text-sm text-nb-muted">{t('panel.loading')}</p>
             )}
@@ -610,7 +616,9 @@ export function App() {
         onReasoning={next => model && choose({ model, reasoning: next })}
         preferLoaded={settings.preferLoadedModel}
         onPreferLoaded={checked => void settingsStorage.set(s => ({ ...s, preferLoadedModel: checked }))}
+        onRefreshLoadedModel={refreshLoadedModel}
         activeLoadedModelName={activeLoadedModelName}
+        localProviderKind={providers.find(p => p.kind === 'lmstudio' || p.kind === 'ollama')?.kind ?? null}
       />
     </div>
   );

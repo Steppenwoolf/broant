@@ -237,8 +237,56 @@ export const ChipIcon = (p: IconProps) => (
   </Svg>
 );
 
+/** LM Studio official streaming tokens brand icon */
+export const LMStudioIcon = ({ size = 20, className = '' }: { size?: number; className?: string }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 100 100"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={`shrink-0 ${className}`}
+    aria-hidden="true">
+    <defs>
+      <linearGradient id="lms-grad-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#4A64FA" />
+        <stop offset="100%" stopColor="#4D1ED4" />
+      </linearGradient>
+    </defs>
+    <rect width="100" height="100" rx="22" fill="url(#lms-grad-bg)" />
+    {/* Row 1 */}
+    <rect x="42" y="18" width="28" height="8.5" rx="4.25" fill="#FFFFFF" fillOpacity="0.38" />
+    <rect x="13" y="18" width="44" height="8.5" rx="4.25" fill="#FFFFFF" />
+    {/* Row 2 */}
+    <rect x="62" y="29.2" width="25" height="8.5" rx="4.25" fill="#FFFFFF" fillOpacity="0.38" />
+    <rect x="30" y="29.2" width="44" height="8.5" rx="4.25" fill="#FFFFFF" />
+    {/* Row 3 */}
+    <rect x="54" y="40.4" width="23" height="8.5" rx="4.25" fill="#FFFFFF" fillOpacity="0.38" />
+    <rect x="20" y="40.4" width="44" height="8.5" rx="4.25" fill="#FFFFFF" />
+    {/* Row 4 */}
+    <rect x="41" y="52.4" width="24" height="8.5" rx="4.25" fill="#FFFFFF" fillOpacity="0.38" />
+    <rect x="8" y="52.4" width="43" height="8.5" rx="4.25" fill="#FFFFFF" />
+    {/* Row 5 */}
+    <rect x="54" y="63.6" width="23" height="8.5" rx="4.25" fill="#FFFFFF" fillOpacity="0.38" />
+    <rect x="20" y="63.6" width="44" height="8.5" rx="4.25" fill="#FFFFFF" />
+    {/* Row 6 */}
+    <rect x="66" y="74.8" width="23" height="8.5" rx="4.25" fill="#FFFFFF" fillOpacity="0.38" />
+    <rect x="48" y="74.8" width="28" height="8.5" rx="4.25" fill="#FFFFFF" />
+  </svg>
+);
+
+/** LLaMA / Ollama geometric mascot icon */
+export const LlamaIcon = (p: IconProps) => (
+  <Svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}>
+    <path d="M8 2.5v3.5M12 2.5v3.5" />
+    <path d="M7 6h6a2 2 0 0 1 2 2v2.5a2 2 0 0 1-2 2h-1v6a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V8a2 2 0 0 1 2-2z" fill="currentColor" fillOpacity="0.15" />
+    <circle cx="9.5" cy="9.5" r="0.8" fill="currentColor" />
+    <path d="M14 9.5h2a1 1 0 0 1 1 1v1.5a1 1 0 0 1-1 1h-2" />
+  </Svg>
+);
+
 export function LogoMark({ size = 20, className = '' }: { size?: number; className?: string }) {
-  return <img src="/icon-128.png" alt="" width={size} height={size} className={`shrink-0 ${className}`} />;
+  return <img src="/icon-128.png" alt="" width={size} height={size} className={`shrink-0 rounded ${className}`} />;
 }
 
 /** The brand's horizontal logo: the mark and "BroAnt" (theme-adaptive). */

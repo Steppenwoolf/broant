@@ -31,6 +31,7 @@ export function initRailHub(getDispatcher: () => BridgeDispatcher | null) {
     const theme = settings.theme === 'light' ? 'light' : 'dark';
     return {
       visible: settings.showMiniRail ?? true,
+      opacity: settings.miniRailOpacity ?? 0.85,
       sidePanelOpen,
       theme,
       bridgeEnabled: Boolean(settings.bridgeEnabled),

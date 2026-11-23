@@ -104,16 +104,16 @@ export function TelemetryHeader({
   const mcpState = !bridgeEnabled ? 'off' : bridgeConnected ? 'linked' : 'armed';
 
   return (
-    <header className="relative flex h-11 shrink-0 items-center justify-between border-b border-ba-border/60 bg-ba-bg px-2.5">
+    <header className="relative flex h-11 shrink-0 items-center justify-between border-b border-ba-border/60 bg-ba-bg px-2">
       {/* Left: Brand mark and two-tone BroAnt typography — symmetric toggle to collapse back to rail */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <button
           type="button"
           onClick={handleCollapse}
           title="Collapse to Rail"
           aria-label="Collapse to Rail"
-          className="group flex items-center gap-2 rounded transition-transform hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-accent">
-          <LogoMark size={20} />
+          className="group flex items-center gap-1.5 p-0.5 rounded transition-transform hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-accent">
+          <LogoMark size={28} />
           <span className="flex items-baseline text-[14px] font-bold tracking-tight select-none">
             <span className="text-ba-fg-strong">Bro</span>
             <span className="text-ba-accent">Ant</span>

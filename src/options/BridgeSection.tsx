@@ -73,16 +73,6 @@ export function BridgeSection() {
         </SettingsRow>
 
         <SettingsRow
-          label="Mini-Rail Floating Dock"
-          description="Show compact floating status dock with LED indicators and quick controls on web pages">
-          <Switch
-            aria-label="Show Mini-Rail Dock"
-            checked={settings.showMiniRail ?? true}
-            onChange={on => void settingsStorage.set(s => ({ ...s, showMiniRail: on }))}
-          />
-        </SettingsRow>
-
-        <SettingsRow
           label={t('bridge.status')}
           description={
             <span className="flex items-center gap-2">

@@ -15,7 +15,7 @@ import { ModeMenu } from '@src/ui/mode-menu';
 import { ModelMenu } from './ModelMenu';
 import type { ModelChoice } from './ModelMenu';
 import type { ReasoningEffort } from '@src/llm/catalogue';
-import { CheckIcon, ChipIcon, CloseIcon, FileIcon, MicIcon, PlusIcon, SendIcon, SpinnerIcon, StarIcon, StopIcon } from '@src/ui/icons';
+import { CheckIcon, ChipIcon, CloseIcon, FileIcon, LlamaIcon, LMStudioIcon, MicIcon, PlusIcon, SendIcon, SpinnerIcon, StarIcon, StopIcon } from '@src/ui/icons';
 
 type VoicePhase = 'idle' | 'starting' | 'recording' | 'transcribing';
 
@@ -182,7 +182,9 @@ export function Composer({
   noModel = false,
   preferLoaded,
   onPreferLoaded,
+  onRefreshLoadedModel,
   activeLoadedModelName,
+  localProviderKind,
 }: {
   active: boolean;
   mode: PermissionMode;
@@ -228,7 +230,9 @@ export function Composer({
   noModel?: boolean;
   preferLoaded?: boolean;
   onPreferLoaded?: (prefer: boolean) => void;
+  onRefreshLoadedModel?: () => void;
   activeLoadedModelName?: string | null;
+  localProviderKind?: 'lmstudio' | 'ollama' | null;
 }) {
   const [text, setText] = useState('');
   const [selected, setSelected] = useState(0);
@@ -488,7 +492,7 @@ export function Composer({
           aria-label={t('composer.placeholder')}
           placeholder={t('composer.placeholder')}
           disabled={noModel}
-          className="max-h-[min(50vh,400px)] min-h-24 w-full resize-none bg-transparent px-3.5 pb-1 pt-3 text-[15px] placeholder:text-ba-muted focus:outline-none disabled:cursor-not-allowed"
+          className="max-h-[min(50vh,400px)] min-h-24 w-full resize-none bg-transparent pl-3.5 pr-10 pb-1 pt-3 text-[15px] placeholder:text-ba-muted focus:outline-none disabled:cursor-not-allowed"
           onChange={e => {
             setText(e.target.value);
             setRecall(null);
@@ -537,7 +541,43 @@ export function Composer({
             }
           }}
         />
-        <div className="flex items-center gap-1.5 px-2 pb-2 max-[279px]:gap-1">
+        {transcribe !== undefined ? (
+          <div className="absolute right-1.5 bottom-10 z-10 flex items-center gap-1 pointer-events-auto">
+            {voice === 'recording' ? (
+              <span className="shrink-0 text-xs tabular-nums text-ba-danger font-mono" aria-hidden="true">
+                {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+              </span>
+            ) : null}
+            <button
+              type="button"
+              aria-label={t(
+                voice === 'recording'
+                  ? 'composer.voiceStop'
+                  : voice === 'transcribing'
+                    ? 'composer.voiceTranscribing'
+                    : 'composer.voice',
+              )}
+              aria-pressed={voice === 'recording'}
+              aria-busy={voice === 'transcribing'}
+              title={t(
+                voice === 'recording'
+                  ? 'composer.voiceStop'
+                  : voice === 'transcribing'
+                    ? 'composer.voiceTranscribing'
+                    : 'composer.voice',
+              )}
+              disabled={noModel}
+              className={`flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent ${voice === 'recording' ? 'animate-pulse bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-300' : 'text-ba-muted hover:bg-ba-surface hover:text-ba-fg'}`}
+              onClick={pressMic}>
+              {voice === 'transcribing' ? (
+                <SpinnerIcon size={15} className="text-ba-accent motion-safe:animate-spin" />
+              ) : (
+                <MicIcon size={17} />
+              )}
+            </button>
+          </div>
+        ) : null}
+        <div className="flex items-center gap-1 px-1.5 pb-2">
           {onAttach ? (
             <>
               <div className="relative shrink-0">
@@ -614,81 +654,56 @@ export function Composer({
             onReasoning={next => onReasoning?.(next)}
             preferLoaded={preferLoaded}
             onPreferLoaded={onPreferLoaded}
+            onRefreshLoadedModel={onRefreshLoadedModel}
             activeLoadedModelName={activeLoadedModelName}
           />
-          {onPreferLoaded !== undefined ? (
+          {onPreferLoaded !== undefined && localProviderKind ? (
             <button
               type="button"
               role="checkbox"
               aria-checked={preferLoaded}
-              onClick={() => onPreferLoaded(!preferLoaded)}
+              onClick={() => {
+                const next = !preferLoaded;
+                onPreferLoaded(next);
+                if (next) onRefreshLoadedModel?.();
+              }}
               title={
-                activeLoadedModelName
-                  ? `Use model currently loaded in LM Studio: ${activeLoadedModelName} (Auto VRAM Priority)`
-                  : 'Use model currently loaded in LM Studio / Ollama (Auto VRAM Priority)'
+                localProviderKind === 'lmstudio'
+                  ? preferLoaded
+                    ? `LM Studio: ${activeLoadedModelName ? `Active (${activeLoadedModelName})` : 'Auto VRAM Priority ON'}`
+                    : 'LM Studio: Auto VRAM Priority OFF (Click to toggle)'
+                  : preferLoaded
+                    ? `Ollama / LLaMA: ${activeLoadedModelName ? `Active (${activeLoadedModelName})` : 'Auto VRAM Priority ON'}`
+                    : 'Ollama / LLaMA: Auto VRAM Priority OFF (Click to toggle)'
               }
-              aria-label="Use model loaded in LM Studio"
-              className={`flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs transition-colors ${
+              aria-label={
+                localProviderKind === 'lmstudio'
+                  ? 'Toggle LM Studio loaded model priority'
+                  : 'Toggle Ollama / LLaMA loaded model priority'
+              }
+              className={`flex size-6 shrink-0 items-center justify-center rounded-lg transition-all ${
                 preferLoaded
-                  ? 'border-ba-honey/80 bg-ba-honey/15 text-ba-honey shadow-[0_0_8px_rgba(217,119,6,0.25)]'
-                  : 'border-ba-border/60 bg-ba-surface text-ba-muted hover:border-ba-border hover:text-ba-fg'
+                  ? localProviderKind === 'lmstudio'
+                    ? 'shadow-[0_0_8px_rgba(94,92,230,0.35)]'
+                    : 'text-[#D97706] hover:bg-[#D97706]/15 hover:text-[#F59E0B] shadow-[0_0_8px_rgba(217,119,6,0.35)]'
+                  : 'text-ba-muted/40 hover:bg-ba-surface hover:text-ba-muted'
               }`}>
-              <span
-                className={`flex size-3.5 items-center justify-center rounded border transition-colors ${
-                  preferLoaded
-                    ? 'border-ba-honey bg-ba-honey text-ba-bg'
-                    : 'border-ba-border bg-ba-bg'
-                }`}>
-                {preferLoaded ? <CheckIcon size={10} className="stroke-[2.5]" /> : null}
-              </span>
-              <ChipIcon size={14} />
+              {localProviderKind === 'lmstudio' ? (
+                <LMStudioIcon size={18} className={preferLoaded ? 'shadow-sm' : 'grayscale opacity-40'} />
+              ) : (
+                <LlamaIcon size={16} className={preferLoaded ? 'drop-shadow-sm' : 'grayscale opacity-60'} />
+              )}
             </button>
           ) : null}
           <button
             type="button"
             onClick={() => setDomMode(d => (d === 'compact' ? 'full' : 'compact'))}
             title="DOM mode: Compact (~14k) or Full"
-            className="flex items-center gap-1 rounded-full border border-ba-border/60 bg-ba-surface px-2 py-0.5 text-[11px] font-mono text-ba-muted transition-colors hover:border-ba-border hover:text-ba-fg">
+            className="flex shrink-0 items-center gap-1 rounded-full border border-ba-border/60 bg-ba-surface px-1.5 py-0.5 text-[11px] font-mono text-ba-muted transition-colors hover:border-ba-border hover:text-ba-fg">
             <span>DOM:</span>
             <span className="font-semibold text-ba-accent">{domMode === 'compact' ? 'Compact' : 'Full'}</span>
           </button>
           <span className="flex-1" />
-          {transcribe !== undefined ? (
-            <>
-              {voice === 'recording' ? (
-                <span className="shrink-0 text-xs tabular-nums text-ba-danger" aria-hidden="true">
-                  {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
-                </span>
-              ) : null}
-              <button
-                type="button"
-                aria-label={t(
-                  voice === 'recording'
-                    ? 'composer.voiceStop'
-                    : voice === 'transcribing'
-                      ? 'composer.voiceTranscribing'
-                      : 'composer.voice',
-                )}
-                aria-pressed={voice === 'recording'}
-                aria-busy={voice === 'transcribing'}
-                title={t(
-                  voice === 'recording'
-                    ? 'composer.voiceStop'
-                    : voice === 'transcribing'
-                      ? 'composer.voiceTranscribing'
-                      : 'composer.voice',
-                )}
-                disabled={noModel}
-                className={`flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent ${voice === 'recording' ? 'animate-pulse bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-300' : 'text-ba-muted hover:bg-ba-surface hover:text-ba-fg'}`}
-                onClick={pressMic}>
-                {voice === 'transcribing' ? (
-                  <SpinnerIcon size={15} className="text-ba-accent motion-safe:animate-spin" />
-                ) : (
-                  <MicIcon size={17} />
-                )}
-              </button>
-            </>
-          ) : null}
           {active ? (
             <button
               type="button"

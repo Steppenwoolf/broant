@@ -48,6 +48,8 @@ export interface Settings {
   bridgeAuthToken: string;
   /** Whether the floating compact Mini-Rail is shown on web pages. */
   showMiniRail: boolean;
+  /** Opacity of the floating compact Mini-Rail (0.2 to 1.0). */
+  miniRailOpacity: number;
   /** DOM pruning mode for observation and mini-rail (compact ~14k vs standard). */
   domPruningMode: 'compact' | 'standard';
   /** Currently loaded model name in local provider (LM Studio / Ollama) if any. */
@@ -76,6 +78,7 @@ export const DEFAULT_SETTINGS: Settings = {
   bridgeServerUrl: 'ws://127.0.0.1:8765',
   bridgeAuthToken: 'broant-secret-key',
   showMiniRail: true,
+  miniRailOpacity: 0.85,
   domPruningMode: 'compact',
 };
 

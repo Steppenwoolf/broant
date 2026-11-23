@@ -1,8 +1,8 @@
 <div align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="public/brand/logo-horizontal.png">
-    <source media="(prefers-color-scheme: light)" srcset="public/brand/logo-horizontal-light.png">
-    <img src="public/brand/logo-horizontal.png" alt="BroAnt Logo" width="460">
+    <source media="(prefers-color-scheme: dark)" srcset="public/brand/banner-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="public/brand/banner-light.png">
+    <img src="public/brand/banner-dark.png" alt="BroAnt" width="100%">
   </picture>
 </div>
 
