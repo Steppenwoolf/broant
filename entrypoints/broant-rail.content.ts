@@ -189,6 +189,12 @@ const RAIL_CSS = `
   height: 100%;
   display: block;
 }
+#ba-open svg,
+#ba-open svg *,
+.btn svg,
+.btn svg * {
+  pointer-events: none;
+}
 .divider {
   width: 24px;
   height: 1px;
@@ -415,7 +421,8 @@ export default defineContentScript({
 
     // Vertical Drag & Drop logic on dock (excluding button clicks)
     dock.addEventListener('pointerdown', (e: PointerEvent) => {
-      if ((e.target as HTMLElement).closest('.btn') || dock.classList.contains('tucked')) {
+      const target = e.target as HTMLElement;
+      if (target === btnOpen || btnOpen.contains(target) || target.closest('.btn') || dock.classList.contains('tucked')) {
         return;
       }
       isDragging = true;

@@ -158,27 +158,37 @@ export class BroAntLifecycleController {
     const tabId = typeof tab?.id === 'number' && tab.id >= 0 ? tab.id : undefined;
     const windowId = tab?.windowId ?? this.state.panelWindowId ?? undefined;
 
-    if (chrome.sidePanel?.open) {
-      const openPromise = tabId !== undefined && windowId !== undefined
-        ? chrome.sidePanel.open({ tabId, windowId })
-        : windowId !== undefined
-          ? chrome.sidePanel.open({ windowId })
-          : tabId !== undefined
-            ? chrome.sidePanel.open({ tabId })
-            : Promise.reject(new Error('No valid tabId or windowId'));
+    if (!chrome.sidePanel?.open) return;
 
-      openPromise
-        .then(() => {
-          this.pendingMinimize = false;
-          this.setState({
-            mode: 'panel',
-            anchorTabId: tabId ?? this.state.anchorTabId,
-            panelWindowId: windowId ?? null,
-          });
-        })
+    const onOpened = () => {
+      this.pendingMinimize = false;
+      this.setState({
+        mode: 'panel',
+        anchorTabId: tabId ?? this.state.anchorTabId,
+        panelWindowId: windowId ?? null,
+      });
+      void this.deps.resumeBridgeIfAllowed();
+    };
+
+    // Chrome/Opera sidePanel.open requires strictly either tabId OR windowId (never both)
+    if (tabId !== undefined) {
+      chrome.sidePanel.open({ tabId })
+        .then(onOpened)
         .catch(err => {
-          console.warn('[broant] sidePanel.open failed from rail click:', err);
-          // If browser blocked sidePanel.open, keep rail visible rather than hiding it
+          console.warn('[broant] sidePanel.open({ tabId }) failed, trying windowId:', err);
+          if (windowId !== undefined) {
+            chrome.sidePanel.open({ windowId })
+              .then(onOpened)
+              .catch(e2 => {
+                console.warn('[broant] sidePanel.open({ windowId }) also failed:', e2);
+              });
+          }
+        });
+    } else if (windowId !== undefined) {
+      chrome.sidePanel.open({ windowId })
+        .then(onOpened)
+        .catch(err => {
+          console.warn('[broant] sidePanel.open({ windowId }) failed:', err);
         });
     }
   }

@@ -11,25 +11,6 @@ import { useStorage } from '@src/ui/hooks';
 import { bridgeConnectedStorage } from '@src/store/settings';
 import { bridgeActivityStore, type BridgeActivityState } from '@src/store/bridge-activity';
 
-function CollapseRailIcon({ size = 15, className = '' }: { size?: number; className?: string }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}>
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <path d="M15 3v18" />
-      <path d="M8 9l3 3-3 3" />
-    </svg>
-  );
-}
-
 export interface TelemetryHeaderProps {
   conversationTitle?: string | null;
   active?: boolean;
@@ -108,15 +89,20 @@ export function TelemetryHeader({
 
   return (
     <header className="relative flex h-11 shrink-0 items-center justify-between border-b border-ba-border/60 bg-ba-bg px-2">
-      {/* Left: Brand mark and two-tone BroAnt typography */}
+      {/* Left: Brand mark and two-tone BroAnt typography — click collapses to rail */}
       <div className="flex items-center gap-1.5">
-        <div className="flex items-center gap-1.5 p-0.5 select-none">
+        <button
+          type="button"
+          onClick={handleMinimize}
+          title="Згорнути в Mini-Rail"
+          aria-label="Згорнути в Mini-Rail"
+          className="group flex items-center gap-1.5 p-0.5 rounded transition-transform hover:scale-105 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-accent">
           <LogoMark size={28} />
-          <span className="flex items-baseline text-[14px] font-bold tracking-tight">
+          <span className="flex items-baseline text-[14px] font-bold tracking-tight select-none">
             <span className="text-ba-fg-strong">Bro</span>
             <span className="text-ba-accent">Ant</span>
           </span>
-        </div>
+        </button>
         {usedTokens > 0 ? (
           <span
             title={`Context usage: ${usedTokens.toLocaleString()} / ${maxTokens.toLocaleString()} tokens (${percent}%)`}
@@ -238,16 +224,6 @@ export function TelemetryHeader({
           aria-label={t('panel.settings')}
           className="flex size-7 items-center justify-center rounded-lg text-ba-muted transition-colors hover:bg-ba-surface hover:text-ba-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-accent">
           <SettingsIcon size={15} />
-        </button>
-
-        {/* Minimize into Rail Button */}
-        <button
-          type="button"
-          onClick={handleMinimize}
-          title="Minimize to Rail"
-          aria-label="Minimize to Rail"
-          className="flex size-7 items-center justify-center rounded-lg text-ba-muted transition-colors hover:bg-ba-surface hover:text-ba-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-ba-accent">
-          <CollapseRailIcon size={15} />
         </button>
       </div>
 
