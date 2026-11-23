@@ -473,8 +473,14 @@ export default defineContentScript({
     });
 
     let clickTimer: number | null = null;
+    let lastTuckTime = 0;
 
     const handleToggleTuck = () => {
+      const now = Date.now();
+      if (now - lastTuckTime < 350) {
+        return;
+      }
+      lastTuckTime = now;
       if (clickTimer !== null) {
         window.clearTimeout(clickTimer);
         clickTimer = null;
@@ -486,6 +492,7 @@ export default defineContentScript({
     dock.addEventListener('dblclick', e => {
       const target = e.target as HTMLElement;
       if (target === btnOpen || btnOpen.contains(target) || !target.closest('.btn')) {
+        e.stopPropagation();
         handleToggleTuck();
       }
     });
