@@ -472,17 +472,40 @@ export default defineContentScript({
       }
     });
 
-    // Double click on dock background toggles tucked state
+    let clickTimer: number | null = null;
+
+    const handleToggleTuck = () => {
+      if (clickTimer !== null) {
+        window.clearTimeout(clickTimer);
+        clickTimer = null;
+      }
+      dock.classList.toggle('tucked');
+    };
+
+    // Double click on dock background OR logo toggles tucked state
     dock.addEventListener('dblclick', e => {
-      if (!(e.target as HTMLElement).closest('.btn')) {
-        dock.classList.toggle('tucked');
+      const target = e.target as HTMLElement;
+      if (target === btnOpen || btnOpen.contains(target) || !target.closest('.btn')) {
+        handleToggleTuck();
       }
     });
 
-    // Clicking emblem immediately sends open_sidepanel with active user gesture
+    btnOpen.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      handleToggleTuck();
+    });
+
+    // Single click: opens Side Panel (debounced); double click: toggles tucked
     btnOpen.addEventListener('click', e => {
       e.stopPropagation();
-      sendAction('open_sidepanel');
+      if (clickTimer !== null) {
+        handleToggleTuck();
+      } else {
+        clickTimer = window.setTimeout(() => {
+          clickTimer = null;
+          sendAction('open_sidepanel');
+        }, 220);
+      }
     });
 
     btnMcp.addEventListener('click', () => sendAction('toggle_mcp'));
