@@ -40,13 +40,21 @@ if ($DryRun) {
 }
 
 $srcCommit = git rev-parse --short HEAD
+$gitName = git config user.name
+$gitEmail = git config user.email
+if (-not $gitName) { $gitName = "BroAnt Sync" }
+if (-not $gitEmail) { $gitEmail = "sync@broant.local" }
+
 Push-Location $tmpDir
 try {
   git init -b $Branch | Out-Null
+  git config user.name $gitName
+  git config user.email $gitEmail
   git add -A
   git commit -m "sync: clean code snapshot from broant@$srcCommit" | Out-Null
   git remote add origin $RemoteUrl
   git push -u --force origin $Branch
+  if ($LASTEXITCODE -ne 0) { throw "git push failed with exit code $LASTEXITCODE" }
 } finally {
   Pop-Location
   Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
