@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { RefRegistry } from '../refs';
 import type { Capture } from '../perception/capture';
@@ -6,7 +7,7 @@ import { buildObservation } from '../perception/observe';
 import { decodeLayout, MAX_TREE_DEPTH } from '../perception/outline';
 
 // d-deep.html?depth=1500: a button near the top, then 1,500 nested divs built by script with a button at the bottom.
-const deep = JSON.parse(readFileSync(`${__dirname}/payloads/d-deep.capture.json`, 'utf8')) as Capture;
+const deep = JSON.parse(gunzipSync(readFileSync(`${__dirname}/payloads/d-deep.capture.json.gz`)).toString('utf8')) as Capture;
 
 describe('pages nested far deeper than real ones (degrade loudly)', () => {
   const o = buildObservation(deep, new RefRegistry('e'), { mode: 'all', budget: 30_000 });

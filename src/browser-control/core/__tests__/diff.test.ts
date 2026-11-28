@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { applyDiff, diffLines, renderDiff } from '../perception/diff';
 import { RefRegistry } from '../refs';
@@ -45,7 +46,7 @@ describe('snapshot diffs', () => {
 
   it('applies exactly between two real outlines of different pages', () => {
     const outline = (page: string) => {
-      const capture = JSON.parse(readFileSync(`${__dirname}/payloads/${page}.capture.json`, 'utf8')) as Capture;
+      const capture = JSON.parse(gunzipSync(readFileSync(`${__dirname}/payloads/${page}.capture.json.gz`)).toString('utf8')) as Capture;
       return buildObservation(capture, new RefRegistry('e'), { mode: 'all', budget: 30_000 }).body.split('\n');
     };
     const a = outline('form');

@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { CUT_SHORT, listModels, testConnection } from '../connection';
 import { NOT_CHAT } from '../catalogue';
 
-const recorded = JSON.parse(readFileSync(`${__dirname}/payloads/model-lists-2026-10-11.json`, 'utf8'));
+const recorded = JSON.parse(gunzipSync(readFileSync(`${__dirname}/payloads/model-lists-2026-10-11.json.gz`)).toString('utf8'));
 const bedrock = JSON.parse(readFileSync(`${__dirname}/payloads/bedrock-ap-southeast-1-2026-11-10.json`, 'utf8'));
 
 function sse(chunks: unknown[]): Response {

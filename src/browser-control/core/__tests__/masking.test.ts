@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { RefRegistry } from '../refs';
 import type { Capture, FrameCapture } from '../perception/capture';
@@ -19,7 +20,7 @@ import { presentedBoxes } from '../tools/labels';
 import { LayerError } from '../../protocol/errors';
 
 const load = (page: string): Capture =>
-  JSON.parse(readFileSync(`${__dirname}/payloads/${page}.capture.json`, 'utf8')) as Capture;
+  JSON.parse(gunzipSync(readFileSync(`${__dirname}/payloads/${page}.capture.json.gz`)).toString('utf8')) as Capture;
 const observe = (capture: Capture) => buildObservation(capture, new RefRegistry('e'), { mode: 'all', budget: 30_000 });
 const withoutFacts = (capture: Capture): Capture => ({
   ...capture,

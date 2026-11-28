@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { RefRegistry } from '../refs';
 import type { Capture } from '../perception/capture';
@@ -8,7 +9,7 @@ import { digestText } from '../perception/layout';
 import { changedSources } from '../interaction/resolve';
 
 const load = (page: string): Capture =>
-  JSON.parse(readFileSync(`${__dirname}/payloads/${page}.capture.json`, 'utf8')) as Capture;
+  JSON.parse(gunzipSync(readFileSync(`${__dirname}/payloads/${page}.capture.json.gz`)).toString('utf8')) as Capture;
 const observe = (capture: Capture, registry = new RefRegistry('e')) =>
   buildObservation(capture, registry, { mode: 'all', budget: 30_000 });
 
