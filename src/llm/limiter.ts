@@ -4,18 +4,25 @@ const slots = new Map<string, { active: number; queue: Array<() => void> }>();
 
 /** Runs `fn` when one of `max` slots for `key` is free. */
 export async function withSlot<T>(key: string, max: number, fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (signal?.aborted) {
+    throw Object.assign(new Error('aborted while waiting for the server'), { name: 'AbortError' });
+  }
   let slot = slots.get(key);
   if (!slot) slots.set(key, (slot = { active: 0, queue: [] }));
   const s = slot;
   if (s.active >= max) {
     await new Promise<void>((resolve, reject) => {
-      const go = () => resolve();
-      s.queue.push(go);
-      signal?.addEventListener('abort', () => {
+      const onAbort = () => {
         const i = s.queue.indexOf(go);
         if (i >= 0) s.queue.splice(i, 1);
         reject(Object.assign(new Error('aborted while waiting for the server'), { name: 'AbortError' }));
-      });
+      };
+      const go = () => {
+        signal?.removeEventListener('abort', onAbort);
+        resolve();
+      };
+      s.queue.push(go);
+      signal?.addEventListener('abort', onAbort, { once: true });
     });
   }
   s.active++;

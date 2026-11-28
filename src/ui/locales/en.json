@@ -12,6 +12,8 @@
   "bridge.description": "Connect external orchestrators (Antigravity, Python, Swarm) to control the browser directly via WebSocket.",
   "bridge.enabled": "Enable Agent Bridge",
   "bridge.enabledHint": "Allows local agent tools and scripts to connect to this browser instance.",
+  "bridge.allowFileUploads": "Allow File Uploads",
+  "bridge.allowFileUploadsHint": "Allows connected local MCP agents to upload files into web page file inputs.",
   "bridge.status": "Connection Status",
   "bridge.connected": "Connected",
   "bridge.connecting": "Connecting...",

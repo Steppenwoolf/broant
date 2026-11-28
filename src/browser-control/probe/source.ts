@@ -742,8 +742,8 @@ export function probeMain(): void {
       if (!label) return null;
       const r = label.getBoundingClientRect();
       const roots = rootsOf(label);
-      for (const fy of [0.5, 0.3, 0.7]) {
-        for (const fx of [0.5, 0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9, 0.05, 0.95]) {
+      for (const fy of [0.5, 0.25, 0.75]) {
+        for (const fx of [0.5, 0.15, 0.85]) {
           const hit = deepElementFromPoint(r.left + fx * r.width, r.top + fy * r.height, roots);
           if (hit && api.hitAccepts(input, hit).accepted) return { fx, fy };
         }

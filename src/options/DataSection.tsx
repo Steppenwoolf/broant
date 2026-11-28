@@ -9,6 +9,8 @@ import { DATA_REQUEST } from '@src/ui/protocol';
 import { useStorage } from '@src/ui/hooks';
 import { deleteOldChats, oldChatsFilename, oldChatsMarkdown, oldChatsStorage, readOldChats } from '@src/store/legacy';
 import type { OldChat } from '@src/store/legacy';
+import { clearLogs, listLogs } from '@src/store/logs';
+import type { LogEntry } from '@src/store/logs';
 
 const NO_CHATS: OldChat[] = [];
 
@@ -67,12 +69,18 @@ export function DataSection() {
   const [used, setUsed] = useState<number | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [deleted, setDeleted] = useState(false);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [copiedLogs, setCopiedLogs] = useState(false);
+  const refreshLogs = () => void listLogs().then(setLogs).catch(() => undefined);
   const measure = () =>
     void navigator.storage
       ?.estimate()
       .then(e => setUsed(e.usage ?? null))
       .catch(() => setUsed(null));
-  useEffect(measure, []);
+  useEffect(() => {
+    measure();
+    refreshLogs();
+  }, []);
   return (
     <div className="flex flex-col gap-6">
       <h2 className="sr-only">{t('settings.nav.data')}</h2>
@@ -83,6 +91,43 @@ export function DataSection() {
       <SettingsCard title={t('data.conversations')} description={t('data.conversationsHint')} />
       <PreviousCard onDeleted={measure} />
       <PrivacyCard />
+      <SettingsCard
+        title="Diagnostic Logs (max 200)"
+        description={`Persistent ring buffer of recent errors and events (${logs.length}/200 stored).`}
+        className="flex flex-col gap-3">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              const text = logs
+                .map(l => `[${l.ts}] [${l.level.toUpperCase()}] [${l.source}] ${l.message}${l.detail ? `\n${l.detail}` : ''}`)
+                .join('\n');
+              void navigator.clipboard.writeText(text || 'No logs recorded.').then(() => {
+                setCopiedLogs(true);
+                setTimeout(() => setCopiedLogs(false), 2000);
+              });
+            }}>
+            {copiedLogs ? 'Copied!' : 'Copy Logs'}
+          </Button>
+          <Button variant="ghost" onClick={refreshLogs}>
+            Refresh
+          </Button>
+          <Button variant="ghost" onClick={() => void clearLogs().then(refreshLogs)}>
+            Clear
+          </Button>
+        </div>
+        {logs.length ? (
+          <pre className="max-h-48 overflow-auto rounded-lg border border-nb-border bg-nb-surface p-2 font-mono text-[11px] leading-relaxed text-nb-fg">
+            {logs
+              .slice(-20)
+              .reverse()
+              .map(l => `${l.ts.slice(11, 19)} [${l.level}] ${l.source}: ${l.message}`)
+              .join('\n')}
+          </pre>
+        ) : (
+          <p className="text-xs text-nb-muted">No diagnostic logs yet.</p>
+        )}
+      </SettingsCard>
       <SettingsCard title={t('data.everything')} description={t('data.everythingHint')} className="flex flex-col gap-2">
         {deleted ? <Notice tone="ok">{t('data.deleted')}</Notice> : null}
         {confirming ? (

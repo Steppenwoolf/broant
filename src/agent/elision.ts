@@ -40,8 +40,10 @@ export interface Elision {
 const BOUNDARY =
   /(?:The text between the page-content markers[^\n]*\n)?<<<page-content (\w+)[^\n]*>>>[\s\S]*?<<<end-page-content \1>>>/g;
 
-export function pageStub(tabId: number | string, rev: number | string): string {
-  return `[tab ${tabId} rev ${rev}: page content elided]`;
+export function pageStub(tabId: number | string, rev: number | string, url?: string, title?: string): string {
+  if (!url && !title) return `[tab ${tabId} rev ${rev}: page content elided]`;
+  const label = [url, title ? `"${title}"` : ''].filter(Boolean).join(' ');
+  return `[tab ${tabId} rev ${rev}: ${label} — page content elided]`;
 }
 
 /** A tool result's text with its page payload replaced by the stub; the receipt lines outside it stay word for word. */
@@ -50,7 +52,7 @@ export function elideText(text: string, stub: string): string {
 }
 
 interface StoredPage {
-  page?: { tabId?: number; rev?: number };
+  page?: { tabId?: number; rev?: number; url?: string; title?: string };
 }
 
 /**
@@ -73,7 +75,7 @@ export function planElision(branch: Entry[]): Elision[] {
       const part = m.parts.find(p => p.type === 'tool-result');
       if (!part || part.type !== 'tool-result' || !part.text.includes('<<<page-content ')) continue;
       const page = (e.result as StoredPage | undefined)?.page;
-      const tab = String(page?.tabId ?? '?');
+      const tab = page?.tabId !== undefined ? String(page.tabId) : e.id;
       if (edited.has(e.id)) {
         newestPerTab.add(tab);
         continue;
@@ -82,7 +84,10 @@ export function planElision(branch: Entry[]): Elision[] {
         newestPerTab.add(tab);
         continue;
       }
-      const replacement = elideText(part.text, pageStub(tab, page?.rev ?? '?'));
+      const replacement = elideText(
+        part.text,
+        pageStub(page?.tabId ?? '?', page?.rev ?? '?', page?.url, page?.title),
+      );
       if (replacement.length < part.text.length) {
         out.push({ targetId: e.id, replacement, saved: part.text.length - replacement.length });
       }

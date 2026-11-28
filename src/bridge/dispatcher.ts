@@ -4,6 +4,55 @@ import { BridgeToolSessionManager } from './tool-sessions';
 import type { RunManager, PanelConnection } from '@src/extension/run-manager';
 import type { PanelEvent } from '@src/ui/protocol';
 
+const ALLOWED_BRIDGE_TOOLS = new Set([
+  'observe',
+  'snapshot',
+  'act',
+  'click',
+  'hover',
+  'press',
+  'fill',
+  'set',
+  'fill_form',
+  'type',
+  'select',
+  'scroll',
+  'navigate',
+  'text',
+  'read',
+  'wait',
+  'tabs',
+  'upload',
+  'dialog',
+  'ask',
+  'screenshot',
+]);
+
+function isUrlAllowed(rawUrl: string, allowedDomains: string[]): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return false;
+  }
+  if (!allowedDomains.length || allowedDomains.includes('*')) {
+    return true;
+  }
+  const host = parsed.hostname.toLowerCase();
+  return allowedDomains.some(pattern => {
+    const p = pattern.trim().toLowerCase();
+    if (!p) return false;
+    if (p.startsWith('*.')) {
+      const base = p.slice(2);
+      return host === base || host.endsWith(`.${base}`);
+    }
+    return host === p || host.endsWith(`.${p}`);
+  });
+}
+
 function resolveToolAndArgs(
   toolName: string,
   rawArgs: Record<string, unknown> = {},
@@ -15,14 +64,33 @@ function resolveToolAndArgs(
     tool = 'snapshot';
   } else if (tool === 'act') {
     const actAction = (args.action as string | undefined)?.toLowerCase();
+    delete args.action;
     if (actAction === 'hover') {
       tool = 'hover';
+    } else if (actAction === 'double_click') {
+      tool = 'click';
+      args.count = 2;
+    } else if (actAction === 'press_enter') {
+      tool = 'press';
+      args.keys = 'Enter';
     } else {
       tool = 'click';
     }
   } else if (tool === 'fill') {
-    if (args.fields) {
+    if (Array.isArray(args.fields)) {
       tool = 'fill_form';
+      args.fields = args.fields.map(item => {
+        if (!item || typeof item !== 'object') return item;
+        const f = { ...(item as Record<string, unknown>) };
+        if (typeof f.ref === 'string' && !f.target) {
+          f.target = { ref: f.ref };
+          delete f.ref;
+        }
+        return f;
+      });
+      if (typeof args.submit === 'boolean') {
+        delete args.submit;
+      }
     } else {
       tool = 'set';
     }
@@ -31,7 +99,7 @@ function resolveToolAndArgs(
   }
 
   // Normalize target format
-  if ((tool === 'click' || tool === 'hover') && args.ref && !args.target) {
+  if ((tool === 'click' || tool === 'hover' || tool === 'press') && args.ref && !args.target) {
     args.target = { ref: args.ref };
     delete args.ref;
   }
@@ -209,13 +277,43 @@ export class BridgeDispatcher {
     let currentTabId = -1;
 
     try {
+      if (!ALLOWED_BRIDGE_TOOLS.has(msg.tool)) {
+        clearTimeout(timer);
+        this.client.send({
+          type: 'tool_result',
+          request_id: msg.request_id,
+          session_id: currentSessionId,
+          tab_id: currentTabId,
+          ok: false,
+          error: {
+            code: 'TOOL_NOT_ALLOWED',
+            message: `Tool "${msg.tool}" is not allowed over Agent Bridge`,
+          },
+          duration_ms: Date.now() - startTime,
+        });
+        return;
+      }
+
+      const allowedDomains = this.client.getAllowedDomains?.() ?? ['*'];
+      if (msg.target?.url && !isUrlAllowed(msg.target.url, allowedDomains)) {
+        throw Object.assign(new Error(`URL "${msg.target.url}" is blocked by Agent Bridge domain policy`), {
+          code: 'URL_NOT_ALLOWED',
+        });
+      }
+
+      const { tool: resolvedTool, args: resolvedArgs } = resolveToolAndArgs(msg.tool, msg.args);
+      if (resolvedTool === 'navigate' && typeof resolvedArgs.url === 'string' && !isUrlAllowed(resolvedArgs.url, allowedDomains)) {
+        throw Object.assign(new Error(`Navigation to "${resolvedArgs.url}" is blocked by Agent Bridge domain policy`), {
+          code: 'URL_NOT_ALLOWED',
+        });
+      }
+
       const managed = await this.toolSessions.acquire(msg.session_id, () =>
         this.resolveTargetTab(msg.target),
       );
       currentSessionId = managed.sessionId;
       currentTabId = managed.tabId;
 
-      const { tool: resolvedTool, args: resolvedArgs } = resolveToolAndArgs(msg.tool, msg.args);
       if (resolvedTool === 'snapshot' && msg.pruning) {
         resolvedArgs.pruning = msg.pruning;
       }
@@ -247,7 +345,7 @@ export class BridgeDispatcher {
           ? {
               code: result.error?.code ?? 'TOOL_ERROR',
               message: result.error?.message ?? 'Tool execution failed',
-              retryable: result.error?.retryable,
+              retryable: (result.error as { retryable?: boolean } | undefined)?.retryable,
             }
           : undefined,
         duration_ms: Date.now() - startTime,
@@ -277,9 +375,21 @@ export class BridgeDispatcher {
   }
 
   private async handleExecuteTask(msg: Extract<BridgeInboundMessage, { type: 'execute_task' }>) {
-    const { task_id, prompt, target } = msg;
+    const { task_id, prompt, target, options } = msg;
     const startTime = Date.now();
     let stepsCount = 0;
+
+    if (target?.url && !isUrlAllowed(target.url, this.client.getAllowedDomains?.() ?? ['*'])) {
+      this.client.send({
+        type: 'task_result',
+        task_id,
+        status: 'failed',
+        error: `Target URL "${target.url}" is blocked by Agent Bridge domain policy`,
+        steps_count: 0,
+        duration_ms: Date.now() - startTime,
+      });
+      return;
+    }
 
     let tabId: number | null = null;
     try {
@@ -300,6 +410,16 @@ export class BridgeDispatcher {
 
     let finalOutput = '';
     let isFinished = false;
+    let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      if (timeoutTimer) {
+        clearTimeout(timeoutTimer);
+        timeoutTimer = null;
+      }
+      this.activeTasks.delete(task_id);
+      this.runManager.connections.delete(connection);
+    };
 
     const connection: PanelConnection = {
       tabId,
@@ -319,20 +439,21 @@ export class BridgeDispatcher {
           });
         } else if (event.type === 'message_end') {
           const entry = event.entry;
-          if (entry.kind === 'tool') {
-            this.client.send({
-              type: 'task_progress',
-              task_id,
-              step: stepsCount,
-              tool: entry.tool,
-              summary: `Executed tool: ${entry.tool}`,
-            });
+          if (entry.kind === 'assistant' && entry.text) {
+            finalOutput = entry.text;
           }
+        } else if (event.type === 'tool_execution_end') {
+          this.client.send({
+            type: 'task_progress',
+            task_id,
+            step: stepsCount,
+            tool: event.row.tool,
+            summary: `Executed tool: ${event.row.tool}`,
+          });
         } else if (event.type === 'run_status') {
-          if (event.status === 'idle' && stepsCount > 0) {
+          if (event.status === 'done') {
             isFinished = true;
-            this.activeTasks.delete(task_id);
-            this.runManager.connections.delete(connection);
+            cleanup();
             this.client.send({
               type: 'task_result',
               task_id,
@@ -341,10 +462,21 @@ export class BridgeDispatcher {
               steps_count: stepsCount,
               duration_ms: Date.now() - startTime,
             });
-          } else if (event.status === 'stopped') {
+          } else if (event.status === 'failed' || event.status === 'capped') {
             isFinished = true;
-            this.activeTasks.delete(task_id);
-            this.runManager.connections.delete(connection);
+            cleanup();
+            this.client.send({
+              type: 'task_result',
+              task_id,
+              status: 'failed',
+              output: finalOutput || undefined,
+              error: `Task ended with status: ${event.status}`,
+              steps_count: stepsCount,
+              duration_ms: Date.now() - startTime,
+            });
+          } else if (event.status === 'stopped' || event.status === 'interrupted') {
+            isFinished = true;
+            cleanup();
             this.client.send({
               type: 'task_result',
               task_id,
@@ -359,13 +491,39 @@ export class BridgeDispatcher {
     };
 
     this.runManager.connections.add(connection);
+    const stopUnderlyingRun = () => {
+      if (connection.conversationId) {
+        void this.runManager.handle(connection, { type: 'stop', conversationId: connection.conversationId }).catch(() => undefined);
+      }
+    };
     this.activeTasks.set(task_id, {
       tabId,
       cancel: () => {
+        if (isFinished) return;
         isFinished = true;
-        this.runManager.connections.delete(connection);
+        cleanup();
+        stopUnderlyingRun();
       },
     });
+
+    const timeoutMs = options?.timeout_ms;
+    if (timeoutMs && timeoutMs > 0) {
+      timeoutTimer = setTimeout(() => {
+        if (isFinished) return;
+        isFinished = true;
+        cleanup();
+        stopUnderlyingRun();
+        this.client.send({
+          type: 'task_result',
+          task_id,
+          status: 'timeout',
+          output: finalOutput || undefined,
+          error: `Task timed out after ${timeoutMs}ms`,
+          steps_count: stepsCount,
+          duration_ms: Date.now() - startTime,
+        });
+      }, timeoutMs);
+    }
 
     try {
       await this.runManager.handle(connection, {
@@ -375,7 +533,7 @@ export class BridgeDispatcher {
         text: prompt,
         attachments: [],
         context: [],
-        mode: 'auto',
+        mode: options?.approval_policy === 'auto_safe' ? 'auto' : 'ask',
         model: null,
         reasoning: 'none',
         startUrl: target?.url,
@@ -383,8 +541,7 @@ export class BridgeDispatcher {
     } catch (err) {
       if (!isFinished) {
         isFinished = true;
-        this.runManager.connections.delete(connection);
-        this.activeTasks.delete(task_id);
+        cleanup();
         this.client.send({
           type: 'task_result',
           task_id,

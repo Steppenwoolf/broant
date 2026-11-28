@@ -14,6 +14,8 @@ interface RailStateSnapshot {
   vramLoaded: boolean;
   vramLabel: string;
   activity: BridgeActivityState;
+  quickRecipes?: Array<{ name: string; description: string }>;
+  activeMonitorsCount?: number;
 }
 
 const DEFAULT_STATE: RailStateSnapshot = {
@@ -28,8 +30,11 @@ const DEFAULT_STATE: RailStateSnapshot = {
   vramLabel: 'LM Studio: idle',
   activity: {
     phase: 'idle',
+    source: 'none',
     activeSessions: 0,
     activeTasks: 0,
+    activeLocalRuns: 0,
+    mcpExecuting: false,
     updatedAt: 0,
   },
 };
@@ -62,8 +67,6 @@ const RAIL_CSS = `
   z-index: 2147483646;
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   user-select: none;
-}
-.dock {
   --ba-bg: #14110F;
   --ba-surface: #1E1916;
   --ba-border: #332B26;
@@ -77,7 +80,20 @@ const RAIL_CSS = `
   --ba-danger: #EF4444;
   --ba-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   --ba-radius: 12px;
-
+}
+:host([data-theme="light"]) {
+  --ba-bg: #F3ECE1;
+  --ba-surface: #E7DCCB;
+  --ba-border: #3F2220;
+  --ba-fg: #2A1215;
+  --ba-muted: #7C655D;
+  --ba-accent: #B44324;
+  --ba-accent-bright: #C85A32;
+  --ba-honey: #D97706;
+  --ba-shadow: 0 4px 14px rgba(74, 21, 27, 0.16);
+  --ba-radius: 10px;
+}
+.dock {
   width: 44px;
   padding: 5px 0;
   display: flex;
@@ -288,6 +304,63 @@ const RAIL_CSS = `
   0% { background: #E07A5F; box-shadow: 0 0 12px #F59E0B; }
   50% { background: #F59E0B; box-shadow: 0 0 4px #C85A32; }
 }
+.popover {
+  position: absolute;
+  right: 54px;
+  top: 0;
+  width: 248px;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--ba-bg);
+  color: var(--ba-fg);
+  border: 1px solid var(--ba-border);
+  box-shadow: var(--ba-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 2147483647;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.popover[hidden] {
+  display: none;
+}
+.pop-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ba-muted);
+  padding: 2px 8px 4px;
+}
+.pop-divider {
+  height: 1px;
+  background: var(--ba-border);
+  margin: 4px 2px;
+}
+.pop-item {
+  all: unset;
+  cursor: pointer;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--ba-fg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background 0.12s ease;
+}
+.pop-item:hover {
+  background: var(--ba-surface);
+}
+.pop-desc {
+  font-size: 11px;
+  color: var(--ba-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 `;
 
 export default defineContentScript({
@@ -335,7 +408,12 @@ export default defineContentScript({
       <button class="btn btn-close" id="ba-close" data-tip="Вимкнути BroAnt">×</button>
     `;
 
-    shadow.append(style, dock);
+    const popover = document.createElement('div');
+    popover.className = 'popover';
+    popover.id = 'ba-popover';
+    popover.hidden = true;
+
+    shadow.append(style, dock, popover);
     document.documentElement.appendChild(host);
 
     const btnOpen = shadow.getElementById('ba-open') as HTMLElement;
@@ -364,9 +442,6 @@ export default defineContentScript({
       if (activity.phase === 'executing') {
         return `Executing (${srcLabel}) • Tool: ${activity.currentTool ?? 'running'} • Click to STOP`;
       }
-      if (activity.phase === 'thinking') {
-        return `Thinking (${srcLabel}) • Click to STOP`;
-      }
       if (activity.phase === 'held') {
         return `Session active (${srcLabel}) • Click to Detach`;
       }
@@ -377,8 +452,12 @@ export default defineContentScript({
       currentState = state;
       const shouldHide = !state.visible || Boolean(state.sidePanelOpen);
       dock.classList.toggle('hidden', shouldHide);
-      if (shouldHide) return;
+      if (shouldHide) {
+        popover.hidden = true;
+        return;
+      }
 
+      host.dataset.theme = state.theme;
       dock.dataset.theme = state.theme;
       dock.style.setProperty('--ba-dock-opacity', String(typeof state.opacity === 'number' ? state.opacity : 0.85));
 
@@ -523,8 +602,85 @@ export default defineContentScript({
       }
     });
 
+    function renderPopover(state: RailStateSnapshot) {
+      popover.replaceChildren();
+      const title = document.createElement('div');
+      title.className = 'pop-title';
+      title.textContent = 'Quick Recipes';
+      popover.appendChild(title);
+
+      for (const r of state.quickRecipes ?? []) {
+        const item = document.createElement('button');
+        item.className = 'pop-item';
+        const nameEl = document.createElement('span');
+        nameEl.textContent = `/${r.name}`;
+        const descEl = document.createElement('span');
+        descEl.className = 'pop-desc';
+        descEl.textContent = r.description || r.name;
+        item.append(nameEl, descEl);
+        item.addEventListener('click', () => {
+          popover.hidden = true;
+          const selectionText = window.getSelection()?.toString().trim().slice(0, 8000) || undefined;
+          sendAction('run_recipe', { recipeName: r.name, selectionText });
+        });
+        popover.appendChild(item);
+      }
+
+      const div1 = document.createElement('div');
+      div1.className = 'pop-divider';
+      popover.appendChild(div1);
+
+      const watchBtn = document.createElement('button');
+      watchBtn.className = 'pop-item';
+      const watchTitle = document.createElement('span');
+      const count = state.activeMonitorsCount ?? 0;
+      watchTitle.textContent = count > 0 ? `+ Watch this page (${count} active)` : '+ Watch this page';
+      watchBtn.appendChild(watchTitle);
+      watchBtn.addEventListener('click', () => {
+        popover.hidden = true;
+        sendAction('watch_page');
+      });
+      popover.appendChild(watchBtn);
+
+      const manageBtn = document.createElement('button');
+      manageBtn.className = 'pop-item';
+      const manageTitle = document.createElement('span');
+      manageTitle.textContent = '+ New / Manage Actions';
+      manageBtn.appendChild(manageTitle);
+      manageBtn.addEventListener('click', () => {
+        popover.hidden = true;
+        sendAction('open_options');
+      });
+      popover.appendChild(manageBtn);
+
+      const panelBtn = document.createElement('button');
+      panelBtn.className = 'pop-item';
+      const panelTitle = document.createElement('span');
+      panelTitle.textContent = 'Open Side Panel';
+      panelBtn.appendChild(panelTitle);
+      panelBtn.addEventListener('click', () => {
+        popover.hidden = true;
+        sendAction('open_routines');
+      });
+      popover.appendChild(panelBtn);
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!popover.hidden && !host.contains(e.target as Node)) {
+        popover.hidden = true;
+      }
+    });
+
     btnDom.addEventListener('click', () => sendAction('toggle_pruning'));
-    btnRoutines.addEventListener('click', () => sendAction('open_routines'));
+    btnRoutines.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (popover.hidden) {
+        renderPopover(currentState);
+        popover.hidden = false;
+      } else {
+        popover.hidden = true;
+      }
+    });
     btnSettings.addEventListener('click', () => sendAction('open_options'));
     btnClose.addEventListener('click', (e) => {
       e.stopPropagation();

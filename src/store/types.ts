@@ -186,13 +186,22 @@ export interface GuardState {
   recent: string[];
   /** Effect-less actions per target. */
   noEffect: Record<string, number>;
+  /** Successful `read` calls per URL (and optional target/selector) across the whole run. */
+  readUrls?: Record<string, number>;
   errorsInRow: number;
   /** Plain-text endings after a mutation, and refusals of done(success) in a row. */
   plainEndings: number;
   doneRefusals: number;
 }
 
-export const EMPTY_GUARDS: GuardState = { recent: [], noEffect: {}, errorsInRow: 0, plainEndings: 0, doneRefusals: 0 };
+export const EMPTY_GUARDS: GuardState = {
+  recent: [],
+  noEffect: {},
+  readUrls: {},
+  errorsInRow: 0,
+  plainEndings: 0,
+  doneRefusals: 0,
+};
 
 export interface DebtItem {
   toolCallId: string;

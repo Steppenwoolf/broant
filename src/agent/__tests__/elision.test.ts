@@ -86,6 +86,21 @@ describe('step 1: elision', () => {
     // Nothing is elided twice.
     expect(planElision([first, old1, old2, new1, later, ...edits])).toEqual([]);
   });
+
+  it('includes url and title in the elided stub when page metadata is present', () => {
+    const oldWithMeta = e({
+      type: 'message',
+      message: {
+        role: 'tool',
+        parts: [{ type: 'tool-result', toolCallId: 't-meta', toolName: 'read', text: wrap('M1', 'article '.repeat(40)), isError: false }],
+      },
+      result: { ok: true, page: { tabId: 1, rev: 2, url: 'https://news.ycombinator.com/item?id=1', title: 'HN Story' } },
+    });
+    const newer = result(wrap('M2', 'newer '.repeat(40)), 1, 3);
+    const plan = planElision([oldWithMeta, newer]);
+    expect(plan).toHaveLength(1);
+    expect(plan[0].replacement).toBe('[tab 1 rev 2: https://news.ycombinator.com/item?id=1 "HN Story" — page content elided]');
+  });
 });
 
 describe('a long run on a 16k window', () => {

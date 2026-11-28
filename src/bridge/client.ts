@@ -243,6 +243,10 @@ export class BridgeClient {
     }
   }
 
+  getAllowedDomains(): string[] {
+    return this.config.allowedDomains ?? ['*'];
+  }
+
   private handleIncoming(msg: BridgeInboundMessage) {
     if (msg.type === 'pong') {
       this.missedPongs = 0;

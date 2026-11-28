@@ -131,6 +131,15 @@ export class BridgeHub extends EventEmitter {
           socket.destroy();
           return;
         }
+        if (this.config.allowedExtensionIds?.length) {
+          const extId = origin.slice('chrome-extension://'.length).split('/')[0];
+          if (!this.config.allowedExtensionIds.includes(extId)) {
+            logStderr('WARN', 'Blocked unapproved extension ID on /extension channel', { extId });
+            socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+            socket.destroy();
+            return;
+          }
+        }
         wss.handleUpgrade(req, socket, head, ws => this.handleExtensionSocket(ws, origin));
         return;
       }
@@ -159,12 +168,24 @@ export class BridgeHub extends EventEmitter {
     logStderr('INFO', `Leader Hub listening on ws://${this.config.host}:${this.config.port}`);
   }
 
-  private handleExtensionSocket(ws: WebSocket, origin?: string): void {
-    if (this.extensionWs && this.extensionWs.readyState === WebSocket.OPEN) {
-      this.extensionWs.close(4000, 'Replaced by newer extension connection');
+  private rejectAllPendingLocal(err: Error): void {
+    for (const [id, entry] of this.pendingLocal.entries()) {
+      clearTimeout(entry.timer);
+      this.pendingLocal.delete(id);
+      entry.reject(err);
     }
-    this.extensionWs = ws;
-    this.extensionAuthed = false;
+  }
+
+  private handleExtensionSocket(ws: WebSocket, origin?: string): void {
+    let authed = false;
+    const authTimer = setTimeout(() => {
+      if (!authed) {
+        logStderr('WARN', 'Closing unauthenticated extension socket after handshake timeout');
+        ws.close(4001, 'Auth handshake timeout');
+      }
+    }, 3_000);
+    authTimer.unref();
+
     logStderr('INFO', 'Chrome extension socket opened (awaiting hello auth)', { origin: origin ?? 'none' });
 
     ws.on('message', raw => {
@@ -177,19 +198,28 @@ export class BridgeHub extends EventEmitter {
       }
 
       if (msg.type === 'ping') {
-        this.safeSend(ws, { type: 'pong', ts: msg.ts ?? Date.now() });
+        if (authed) {
+          this.safeSend(ws, { type: 'pong', ts: msg.ts ?? Date.now() });
+        }
         return;
       }
 
       if (msg.type === 'hello') {
         const token = msg.auth_token ?? '';
         if (!safeTokenEqual(token, this.config.authToken)) {
+          clearTimeout(authTimer);
           logStderr('ERROR', 'Extension auth_token mismatch in hello handshake');
-          this.extensionAuthed = false;
           this.safeSend(ws, { type: 'auth_ack', ok: false, error: 'Invalid auth token' });
           ws.close(4001, 'Invalid auth token');
           return;
         }
+
+        clearTimeout(authTimer);
+        authed = true;
+        if (this.extensionWs && this.extensionWs !== ws && this.extensionWs.readyState === WebSocket.OPEN) {
+          this.extensionWs.close(4000, 'Replaced by newer extension connection');
+        }
+        this.extensionWs = ws;
         this.extensionAuthed = true;
         this.safeSend(ws, { type: 'auth_ack', ok: true });
         logStderr('INFO', 'Chrome extension authenticated successfully');
@@ -197,8 +227,8 @@ export class BridgeHub extends EventEmitter {
         return;
       }
 
-      if (!this.extensionAuthed) {
-        logStderr('WARN', 'Ignored message from unauthenticated extension socket', {
+      if (!authed || this.extensionWs !== ws) {
+        logStderr('WARN', 'Ignored message from unauthenticated or superseded extension socket', {
           type: (msg as { type?: string }).type,
         });
         return;
@@ -208,9 +238,11 @@ export class BridgeHub extends EventEmitter {
     });
 
     ws.on('close', (code, reason) => {
+      clearTimeout(authTimer);
       if (this.extensionWs === ws) {
         this.extensionWs = null;
         this.extensionAuthed = false;
+        this.rejectAllPendingLocal(new ExtensionDisconnectedError(this.config.port));
       }
       logStderr('WARN', 'Chrome extension disconnected', { code, reason: reason.toString() });
     });
@@ -299,6 +331,10 @@ export class BridgeHub extends EventEmitter {
     this.relayUpstreamWs = ws;
     logStderr('INFO', `Attached to Leader Hub at ${url}`);
 
+    ws.on('error', err => {
+      logStderr('ERROR', 'Relay upstream socket error', { message: err.message });
+    });
+
     ws.on('message', raw => {
       let msg: ExtensionInboundMessage;
       try {
@@ -311,6 +347,7 @@ export class BridgeHub extends EventEmitter {
 
     ws.on('close', () => {
       this.relayUpstreamWs = null;
+      this.rejectAllPendingLocal(new ExtensionDisconnectedError(this.config.port));
       logStderr('WARN', 'Lost connection to Leader Hub');
       if (!this.shuttingDown) {
         const jitter = Math.floor(Math.random() * 300) + 150;

@@ -2,8 +2,9 @@
 // Keeps Controller sessions alive across sequential calls (observe -> act -> fill),
 // preserving element refs and CDP attachment without reconnect overhead.
 
-import type { Controller, Session } from '@src/browser-control';
+import type { Capability, Controller, Session, UrlPolicy } from '@src/browser-control';
 import { bridgeActivityStore } from '@src/store/bridge-activity';
+import { settingsStorage, siteRulesStorage } from '@src/store/settings';
 
 export interface ManagedToolSession {
   sessionId: string;
@@ -46,12 +47,40 @@ export class BridgeToolSessionManager {
     return this.controller;
   }
 
+  private async resolveCapabilities(): Promise<Capability[]> {
+    const caps: Capability[] = [];
+    try {
+      const settings = await settingsStorage.get();
+      if (settings.bridgeAllowFileUploads) {
+        caps.push('files');
+      }
+    } catch {
+      // Ignore storage errors in isolated unit test environments
+    }
+    return caps;
+  }
+
+  private async resolveUrlPolicy(): Promise<UrlPolicy> {
+    try {
+      const rules = await siteRulesStorage.get();
+      const blocked = Object.entries(rules)
+        .filter(([, entry]) => entry.rule === 'block')
+        .map(([site]) => site);
+      return { allow: [], deny: [], blocked };
+    } catch {
+      return { allow: [], deny: [], blocked: [] };
+    }
+  }
+
   async acquire(
     sessionId: string | undefined,
     resolveTabId: () => Promise<number>,
   ): Promise<ManagedToolSession> {
+    const [capabilities, urlPolicy] = await Promise.all([this.resolveCapabilities(), this.resolveUrlPolicy()]);
+
     if (sessionId && this.sessions.has(sessionId)) {
       const existing = this.sessions.get(sessionId)!;
+      existing.session.setCapabilities(capabilities);
       existing.lastUsedAt = Date.now();
       return existing;
     }
@@ -60,14 +89,26 @@ export class BridgeToolSessionManager {
     const existingSid = this.tabToSession.get(tabId);
     if (existingSid && this.sessions.has(existingSid)) {
       const existing = this.sessions.get(existingSid)!;
+      existing.session.setCapabilities(capabilities);
       existing.lastUsedAt = Date.now();
       return existing;
     }
 
     const controller = await this.getController();
+    const allowFileUploads = capabilities.includes('files');
     const session = controller.createSession({
-      capabilities: ['core', 'tabs'],
-      confirm: 'never',
+      capabilities,
+      urlPolicy,
+      confirm: 'sensitive',
+      decideWrite: async question => {
+        if (question.category === 'submit') {
+          return { decision: 'run', by: 'auto', canRemember: false };
+        }
+        if (question.category === 'upload' && allowFileUploads) {
+          return { decision: 'run', by: 'auto', canRemember: false };
+        }
+        return { decision: 'ask', canRemember: false };
+      },
     });
     session.shareTab(tabId);
 
@@ -88,7 +129,7 @@ export class BridgeToolSessionManager {
       activeTabId: tabId,
     });
 
-    if (typeof chrome !== 'undefined' && chrome.scripting?.executeScript) {
+    if (typeof chrome !== 'undefined' && typeof chrome.scripting?.executeScript === 'function') {
       void import('@src/extension/border').then(({ injectBorder }) => {
         void injectBorder(tabId, 'on').catch(() => undefined);
       }).catch(() => undefined);
@@ -155,7 +196,7 @@ export class BridgeToolSessionManager {
       phase: this.sessions.size > 0 ? 'held' : 'idle',
     });
 
-    if (typeof chrome !== 'undefined' && chrome.scripting?.executeScript) {
+    if (typeof chrome !== 'undefined' && typeof chrome.scripting?.executeScript === 'function') {
       void import('@src/extension/border').then(({ injectBorder }) => {
         void injectBorder(entry.tabId, 'off').catch(() => undefined);
       }).catch(() => undefined);

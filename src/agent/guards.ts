@@ -8,6 +8,8 @@ export const REPEAT_WINDOW = 6;
 export const REPEAT_LIMIT = 3;
 export const NO_EFFECT_NUDGE = 2;
 export const NO_EFFECT_STOP = 3;
+export const READ_REPEAT_NUDGE = 2;
+export const READ_REPEAT_STOP = 3;
 export const ERROR_STOP = 5;
 
 export interface GuardVerdict {
@@ -39,7 +41,8 @@ export function signature(
     : isError
       ? 'error'
       : 'ok';
-  return `${tool} ${JSON.stringify(rest)} → ${outcome}`;
+  const pageTag = (tool === 'read' || tool === 'snapshot') && result?.page?.url ? ` @${result.page.url}` : '';
+  return `${tool} ${JSON.stringify(rest)}${pageTag} → ${outcome}`;
 }
 
 export class Guards {
@@ -75,6 +78,26 @@ export class Guards {
         };
       }
     }
+    if (tool === 'read' && !isError && result?.ok && result.page?.url) {
+      const readUrls = (s.readUrls ??= {});
+      const scope = args.target ?? args.selector;
+      const rev = result.page.rev ?? '?';
+      const readKey = scope ? `${result.page.url}@${rev}#${JSON.stringify(scope)}` : `${result.page.url}@${rev}`;
+      const readCount = (readUrls[readKey] ?? 0) + 1;
+      readUrls[readKey] = readCount;
+      if (readCount >= READ_REPEAT_STOP) {
+        return {
+          stop: `read on ${result.page.url} was repeated ${readCount} times in this run.`,
+          guard: 'no_effect',
+        };
+      }
+      if (readCount >= READ_REPEAT_NUDGE) {
+        return {
+          nudge: `you already read ${result.page.url} (${readCount} times in this run). Use the information you already gathered or move to the next item instead of re-reading.`,
+        };
+      }
+    }
+
     const repeats = s.recent.filter(r => r === sig).length;
     if (repeats >= REPEAT_LIMIT) {
       return {

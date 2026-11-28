@@ -1,10 +1,12 @@
 // Settings → Shortcuts: add, edit, pin and delete saved shortcuts.
 import * as Dialog from '@radix-ui/react-dialog';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { deleteShortcut, setPinned } from '@src/store/shortcuts';
+import { deleteMonitor, listMonitors, updateMonitorState, upsertMonitor } from '@src/store/monitors';
+import type { PageMonitor } from '@src/store/monitors';
 import { providersStorage } from '@src/store/settings';
 import type { ProviderConfig } from '@src/store/settings';
-import { Button } from '@src/ui/components';
+import { Button, Field, Input, Switch } from '@src/ui/components';
 import { useStorage } from '@src/ui/hooks';
 import { t } from '@src/ui/i18n';
 import { CloseIcon, PencilIcon, StarIcon, TrashIcon } from '@src/ui/icons';
@@ -31,6 +33,20 @@ export function ShortcutsSection() {
   );
   const [editing, setEditing] = useState<ShortcutDraft | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [monitors, setMonitors] = useState<PageMonitor[]>([]);
+  const [monUrl, setMonUrl] = useState('');
+  const [monTitle, setMonTitle] = useState('');
+  const [monInterval, setMonInterval] = useState('15');
+  const [monCondition, setMonCondition] = useState('');
+  const [monError, setMonError] = useState<string | null>(null);
+
+  const reloadMonitors = () => {
+    void listMonitors().then(setMonitors).catch(() => undefined);
+  };
+
+  useEffect(() => {
+    reloadMonitors();
+  }, []);
   return (
     <div className="flex flex-col gap-6">
       <h2 className="sr-only">{t('settings.nav.shortcuts')}</h2>
@@ -56,6 +72,11 @@ export function ShortcutsSection() {
                     <StarIcon filled={!!s.pinned} size={16} />
                   </button>
                   <span className="font-mono text-sm font-medium">/{s.name}</span>
+                  {s.kind === 'recipe' ? (
+                    <span className="rounded bg-nb-surface px-1.5 py-0.5 text-[10px] font-medium text-nb-accent">
+                      0-tool recipe
+                    </span>
+                  ) : null}
                   <span className="flex-1" />
                   <button
                     type="button"
@@ -93,6 +114,106 @@ export function ShortcutsSection() {
             ))}
           </ul>
         ) : null}
+      </SettingsCard>
+      <SettingsCard
+        title="Page Monitors"
+        description="Background page change watchers (0 LLM tokens when unchanged). Add via Mini-Rail (+ Watch this page) or below."
+        className="flex flex-col gap-4 pt-2">
+        <form
+          className="flex flex-col gap-3 rounded-lg border border-nb-border p-3"
+          onSubmit={e => {
+            e.preventDefault();
+            setMonError(null);
+            void upsertMonitor({
+              url: monUrl,
+              title: monTitle || undefined,
+              intervalMinutes: Number(monInterval) || 15,
+              conditionPrompt: monCondition || undefined,
+            }).then(res => {
+              if (!res.ok) {
+                setMonError(res.error);
+                return;
+              }
+              setMonUrl('');
+              setMonTitle('');
+              setMonCondition('');
+              reloadMonitors();
+            });
+          }}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Field label="Page URL">
+              <Input
+                type="url"
+                placeholder="https://example.com"
+                value={monUrl}
+                onChange={e => setMonUrl(e.target.value)}
+              />
+            </Field>
+            <Field label="Label (optional)">
+              <Input
+                placeholder="Product price"
+                value={monTitle}
+                onChange={e => setMonTitle(e.target.value)}
+              />
+            </Field>
+            <Field label="Interval (min, >=5)">
+              <Input
+                type="number"
+                min={5}
+                value={monInterval}
+                onChange={e => setMonInterval(e.target.value)}
+              />
+            </Field>
+          </div>
+          <Field label="LLM Condition (optional, evaluated only when page text changes)">
+            <Input
+              placeholder="e.g. Notify if price drops below 100 EUR"
+              value={monCondition}
+              onChange={e => setMonCondition(e.target.value)}
+            />
+          </Field>
+          {monError ? <p className="text-xs text-red-600 dark:text-red-400">{monError}</p> : null}
+          <Button type="submit" variant="primary" className="self-start">
+            Add Page Monitor
+          </Button>
+        </form>
+        {monitors.length ? (
+          <ul className="divide-y divide-nb-border border-t border-nb-border" aria-label="Page Monitors">
+            {monitors.map(m => (
+              <li key={m.id} className="flex items-center gap-3 py-3">
+                <Switch
+                  aria-label={`Enable monitor ${m.title}`}
+                  checked={m.enabled}
+                  onChange={enabled => void updateMonitorState(m.id, { enabled }).then(reloadMonitors)}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium">{m.title}</span>
+                    <span className="text-xs text-nb-muted">every {m.intervalMinutes}m</span>
+                    {m.lastStatus ? (
+                      <span className="rounded bg-nb-surface px-1.5 py-0.5 text-[10px] text-nb-muted">
+                        {m.lastStatus}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="truncate text-xs text-nb-muted">{m.url}</p>
+                  {m.conditionPrompt ? (
+                    <p className="truncate text-xs text-nb-muted">Condition: {m.conditionPrompt}</p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  className={ICON_BUTTON}
+                  aria-label={`Delete monitor ${m.title}`}
+                  onClick={() => void deleteMonitor(m.id).then(reloadMonitors)}>
+                  <TrashIcon size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-nb-muted">No page monitors configured yet.</p>
+        )}
       </SettingsCard>
       <Dialog.Root open={editing !== null} onOpenChange={open => !open && setEditing(null)}>
         <Dialog.Portal>

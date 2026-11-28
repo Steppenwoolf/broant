@@ -277,7 +277,7 @@ export const LMStudioIcon = ({ size = 20, className = '' }: { size?: number; cla
 
 /** LLaMA / Ollama geometric mascot icon */
 export const LlamaIcon = (p: IconProps) => (
-  <Svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}>
+  <Svg {...p}>
     <path d="M8 2.5v3.5M12 2.5v3.5" />
     <path d="M7 6h6a2 2 0 0 1 2 2v2.5a2 2 0 0 1-2 2h-1v6a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V8a2 2 0 0 1 2-2z" fill="currentColor" fillOpacity="0.15" />
     <circle cx="9.5" cy="9.5" r="0.8" fill="currentColor" />

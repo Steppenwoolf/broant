@@ -145,61 +145,101 @@ async function viewportOf(cdp: CdpPort): Promise<Viewport | null> {
 async function planFrames(cdp: CdpPort, frames: FrameRecord[]): Promise<FrameCapture[]> {
   const byId = new Map(frames.map(f => [f.frameId, f]));
   const planned = new Map<string, FrameCapture>();
+  const skip = (f: FrameCapture, reason: string) => Object.assign(f, { status: 'skipped' as const, reason });
+
+  for (const frame of frames) {
+    planned.set(frame.frameId, { ...frame, ownerBackendNodeId: null, status: 'captured', nodes: [], fields: {} });
+  }
+
+  // Resolve frame owners in parallel for all child frames.
+  await Promise.all(
+    frames
+      .filter(f => Boolean(f.parentFrameId))
+      .map(async frame => {
+        const parentRecord = byId.get(frame.parentFrameId!);
+        if (!parentRecord) return;
+        try {
+          const { backendNodeId } = await cdp.send<{ backendNodeId: number }>(
+            parentRecord.sessionId,
+            'DOM.getFrameOwner',
+            { frameId: frame.frameId },
+          );
+          planned.get(frame.frameId)!.ownerBackendNodeId = backendNodeId;
+        } catch {
+          // The owner is not in the parent's DOM any more; the frame is going away.
+        }
+      }),
+  );
+
+  // Check box models in parallel for frames that have an owner and pass cheap static checks.
+  const boxChecks = frames.filter(frame => {
+    if (!frame.parentFrameId) return false;
+    const base = planned.get(frame.frameId)!;
+    const parentRecord = byId.get(frame.parentFrameId);
+    if (!parentRecord || frame.adFrame || frame.depth > FRAME_LIMITS.maxDepth || base.ownerBackendNodeId === null) {
+      return false;
+    }
+    return true;
+  });
+
+  const boxResults = new Map<string, { width: number; height: number } | null>();
+  await Promise.all(
+    boxChecks.map(async frame => {
+      const parentRecord = byId.get(frame.parentFrameId!)!;
+      const ownerId = planned.get(frame.frameId)!.ownerBackendNodeId!;
+      try {
+        const { model } = await cdp.send<{ model: { width: number; height: number } }>(
+          parentRecord.sessionId,
+          'DOM.getBoxModel',
+          { backendNodeId: ownerId },
+        );
+        boxResults.set(frame.frameId, model);
+      } catch {
+        boxResults.set(frame.frameId, null);
+      }
+    }),
+  );
+
   let captured = 0;
   for (const frame of frames) {
-    const base: FrameCapture = { ...frame, ownerBackendNodeId: null, status: 'captured', nodes: [], fields: {} };
-    planned.set(frame.frameId, base);
+    const base = planned.get(frame.frameId)!;
     if (!frame.parentFrameId) {
       captured++;
       continue;
     }
     const parent = planned.get(frame.parentFrameId);
     const parentRecord = byId.get(frame.parentFrameId);
-    const skip = (reason: string) => Object.assign(base, { status: 'skipped', reason });
     if (!parent || !parentRecord) {
-      skip('its parent frame is unknown');
+      skip(base, 'its parent frame is unknown');
       continue;
     }
-    try {
-      const { backendNodeId } = await cdp.send<{ backendNodeId: number }>(parentRecord.sessionId, 'DOM.getFrameOwner', {
-        frameId: frame.frameId,
-      });
-      base.ownerBackendNodeId = backendNodeId;
-    } catch {
-      // The owner is not in the parent's DOM any more; the frame is going away.
-    }
     if (parent.status !== 'captured') {
-      skip('inside a frame that was not captured');
+      skip(base, 'inside a frame that was not captured');
       continue;
     }
     if (frame.adFrame) {
-      skip('ad frame (skipped by policy)');
+      skip(base, 'ad frame (skipped by policy)');
       continue;
     }
     if (frame.depth > FRAME_LIMITS.maxDepth) {
-      skip(`nested deeper than ${FRAME_LIMITS.maxDepth}`);
+      skip(base, `nested deeper than ${FRAME_LIMITS.maxDepth}`);
       continue;
     }
     if (base.ownerBackendNodeId === null) {
-      skip('its iframe element is gone');
+      skip(base, 'its iframe element is gone');
       continue;
     }
-    try {
-      const { model } = await cdp.send<{ model: { width: number; height: number } }>(
-        parentRecord.sessionId,
-        'DOM.getBoxModel',
-        { backendNodeId: base.ownerBackendNodeId },
-      );
-      if (model.width < FRAME_LIMITS.minSize || model.height < FRAME_LIMITS.minSize) {
-        skip(`smaller than ${FRAME_LIMITS.minSize}×${FRAME_LIMITS.minSize} px`);
-        continue;
-      }
-    } catch {
-      skip('not rendered');
+    const model = boxResults.get(frame.frameId);
+    if (!model) {
+      skip(base, 'not rendered');
+      continue;
+    }
+    if (model.width < FRAME_LIMITS.minSize || model.height < FRAME_LIMITS.minSize) {
+      skip(base, `smaller than ${FRAME_LIMITS.minSize}×${FRAME_LIMITS.minSize} px`);
       continue;
     }
     if (captured >= FRAME_LIMITS.maxFrames) {
-      skip(`more than ${FRAME_LIMITS.maxFrames} frames`);
+      skip(base, `more than ${FRAME_LIMITS.maxFrames} frames`);
       continue;
     }
     captured++;
@@ -251,6 +291,7 @@ export async function captureTier1(
   await Promise.all([...new Set(frames.map(f => f.sessionId))].map(s => enableDomains(cdp, s, state.enabledSessions)));
   const planned = await planFrames(cdp, frames);
   const layoutPromise = captureLayout(cdp, planned, state);
+  const viewportPromise = viewportOf(cdp);
   await Promise.all(
     planned
       .filter(f => f.status === 'captured')
@@ -263,15 +304,22 @@ export async function captureTier1(
             CAPTURE_COMMAND_TIMEOUT_MS,
           );
           frame.nodes = nodes;
-          frame.fields = await fieldFacts(cdp, frame.sessionId, nodes);
         } catch (error) {
           frame.status = 'failed';
           frame.reason = error instanceof Error ? error.message : String(error);
         }
       }),
   );
-  const viewport = await viewportOf(cdp);
-  const layout = await layoutPromise;
+  const [viewport, layout] = await Promise.all([viewportPromise, layoutPromise]);
+  if (layout.error || !layout.layout) {
+    await Promise.all(
+      planned
+        .filter(f => f.status === 'captured')
+        .map(async frame => {
+          frame.fields = await fieldFacts(cdp, frame.sessionId, frame.nodes);
+        }),
+    );
+  }
   const main = planned[0];
   const root = main?.nodes.find(n => roleOf(n) === 'RootWebArea');
   return {

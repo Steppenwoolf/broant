@@ -6,6 +6,8 @@ import type { HostPort } from '@src/agent/ports';
 import type { Session, UserStepDetails } from '@src/browser-control';
 import { agentSystemPrompt } from '@src/agent/prompt';
 import { toolsForRun } from '@src/agent/tools';
+import { runRecipe } from '@src/agent/recipes';
+import { BUILTIN_RECIPES, listShortcuts } from '@src/store/shortcuts';
 import { toDisplay } from '@src/agent/display';
 import {
   activeBranch,
@@ -27,6 +29,7 @@ import {
   updateConversation,
 } from '@src/store/conversations';
 import { DEFAULT_SETTINGS, getLive, removeLive, setLive, settingsStorage } from '@src/store/settings';
+import { logEvent } from '@src/store/logs';
 import { NOTE_LABEL, RunWriter } from '@src/agent/records';
 import { planRestore, RESTART_NOTE, takenOver } from '@src/agent/restore';
 import { runCompaction } from '@src/agent/compaction';
@@ -52,7 +55,7 @@ import { PromptBroker } from './prompt-broker';
 import { notifyFinished, notifyNeeds } from './notify';
 import { thumbnail } from './thumbnail';
 import { isNumberedCopy, saveText } from './downloads';
-import { checkSave } from '@src/agent/save-file';
+import { checkSave, requiresSaveConfirmation } from '@src/agent/save-file';
 import { conversationMarkdown, exportName } from '@src/agent/export';
 import { isBlockedSite, quote } from '@src/browser-control';
 import { clearShortcuts, isStartUrl } from '@src/store/shortcuts';
@@ -323,8 +326,8 @@ export class RunManager {
   emit(conversationId: string, body: PanelEventBody): void {
     this.journal.emit(conversationId, body);
     observe(body);
-    if (body.type === 'tool_call' && (body as { tool?: string }).tool) {
-      bridgeActivityStore.update({ currentTool: (body as { tool?: string }).tool });
+    if (body.type === 'tool_execution_start' && body.row.tool) {
+      bridgeActivityStore.update({ currentTool: body.row.tool });
     }
   }
 
@@ -838,6 +841,11 @@ export class RunManager {
       // The live pair is written before the conversation's state is published.
       if (command.model) await setLive(conversation.id, { model: command.model, reasoning: command.reasoning });
       await this.#subscribe(connection, command.tabId, conversation.id);
+      for (const c of this.connections) {
+        if (c !== connection && c.tabId === command.tabId) {
+          await this.#subscribe(c, command.tabId, conversation.id);
+        }
+      }
       await this.scope.add(conversation.id, command.tabId, 'start', { move: true });
     }
     const conversationId = conversation.id;
@@ -895,10 +903,12 @@ export class RunManager {
     for (const warning of warnings) await this.#notice(conversationId, warning, 'warn');
     if (startUrl) await openStartPage(command.tabId, startUrl);
     // The run takes the pair this message carried, whatever was chosen since.
+    const selectionText = quotes.map(q => q.text).join('\n\n') || undefined;
     this.#launch(
       conversationId,
       undefined,
       command.model ? { model: command.model, reasoning: command.reasoning } : undefined,
+      command.recipeName ? { name: command.recipeName, tabId: command.tabId, selectionText } : undefined,
     );
   }
 
@@ -1028,7 +1038,11 @@ export class RunManager {
     const content = String(args.content);
     let saveAs = false;
     const canSave = () => chrome.permissions.contains({ permissions: ['downloads'] }).catch(() => false);
-    if ((this.#modes.get(conversationId) ?? 'ask') === 'ask' || !(await canSave())) {
+    if (
+      (this.#modes.get(conversationId) ?? 'ask') === 'ask' ||
+      requiresSaveConfirmation(check.filename, check.mimeType) ||
+      !(await canSave())
+    ) {
       const answer = await this.broker.open<'save' | 'save-as' | 'discard'>(
         conversationId,
         'save-file',
@@ -1148,7 +1162,8 @@ export class RunManager {
     try {
       const model = await resolveModel(await livePair(conversationId));
       const settings = (await settingsStorage.get()) ?? DEFAULT_SETTINGS;
-      const tools = toolsForRun({ vision: model.profile.vision });
+      const isLocal = model.chat?.spec?.kind === 'lmstudio' || model.chat?.spec?.kind === 'ollama';
+      const tools = toolsForRun({ vision: model.profile.vision, compact: isLocal });
       const system = agentSystemPrompt({
         responseLanguage: settings.responseLanguage,
         tools: tools.map(t => t.name),
@@ -1276,7 +1291,12 @@ export class RunManager {
    * Starts a run. Its model and effort are the pair given (the message's), or the live pair read now, before anything
    * awaits, so a choice made while the run starts applies to the next run.
    */
-  #launch(conversationId: string, restore?: RunRecord, pair?: LivePair): void {
+  #launch(
+    conversationId: string,
+    restore?: RunRecord,
+    pair?: LivePair,
+    recipeOverride?: { name: string; tabId: number; selectionText?: string },
+  ): void {
     const starting = pair ? Promise.resolve(pair) : livePair(conversationId);
     starting.catch(() => undefined);
     const controller = new AbortController();
@@ -1317,7 +1337,44 @@ export class RunManager {
         this.#modes.set(conversationId, conversation.mode);
         const session = await this.#openSession(conversationId);
         record.tabs = session.tabIds();
-        const tools = toolsForRun({ vision: model.profile.vision });
+        if (recipeOverride) {
+          const saved = await listShortcuts().catch(() => []);
+          const recipe = [...saved, ...BUILTIN_RECIPES].find(s => s.name === recipeOverride.name);
+          if (recipe) {
+            const tab = await chrome.tabs.get(recipeOverride.tabId).catch(() => null);
+            const res = await runRecipe({
+              conversationId,
+              runId,
+              tabId: recipeOverride.tabId,
+              recipe,
+              selectionText: recipeOverride.selectionText,
+              pageUrl: tab?.url,
+              pageTitle: tab?.title,
+              model,
+              layer: layerPort(session, this.border),
+              emit: event => this.emit(conversationId, event),
+              signal: controller.signal,
+            });
+            if (res.output) {
+              await appendEntry(conversationId, {
+                type: 'message',
+                message: { role: 'assistant', parts: [{ type: 'text', text: res.output }] },
+              });
+            }
+            end = {
+              status: res.ok ? 'done' : controller.signal.aborted ? 'stopped' : 'failed',
+              outcome: res.ok ? 'success' : 'failed',
+              reason: res.error,
+              usage: ZERO_USAGE,
+              turns: 1,
+            };
+            if (end.status === 'failed' && end.reason) await this.#notice(conversationId, end.reason, 'error');
+            await this.#setStatus(record, end.status, end.reason);
+            return;
+          }
+        }
+        const isLocal = model.chat?.spec?.kind === 'lmstudio' || model.chat?.spec?.kind === 'ollama';
+      const tools = toolsForRun({ vision: model.profile.vision, compact: isLocal });
         const loop = new AgentLoop({
           conversationId,
           runId,
@@ -1365,6 +1422,7 @@ export class RunManager {
         }
       } catch (error) {
         const message = error instanceof ModelUnavailable ? error.message : `The run failed: ${String(error)}`;
+        logEvent('error', 'run-manager', message, error);
         await this.#notice(conversationId, message, 'error');
         record.outcome = 'failed';
         await this.#setStatus(record, 'failed', message);
@@ -1410,6 +1468,33 @@ export class RunManager {
       });
     }
     this.#launch(conversationId);
+  }
+
+  async runQuickRecipe(tabId: number, recipeName: string, selectionText?: string): Promise<void> {
+    const saved = await listShortcuts().catch(() => []);
+    const recipe = [...saved, ...BUILTIN_RECIPES].find(s => s.name === recipeName);
+    if (!recipe) return;
+
+    const settings = (await settingsStorage.get()) ?? DEFAULT_SETTINGS;
+    const activeConn = [...this.connections].find(c => c.tabId === tabId);
+    const conn: PanelConnection = activeConn ?? { tabId, conversationId: null, sink: () => undefined };
+    const tab = selectionText ? await chrome.tabs.get(tabId).catch(() => null) : null;
+
+    await this.#send(conn, {
+      type: 'send',
+      tabId,
+      conversationId: conn.conversationId,
+      text: recipe.text,
+      attachments: [],
+      context: selectionText
+        ? [{ kind: 'selection', text: selectionText, url: tab?.url ?? '', title: tab?.title ?? '' }]
+        : [],
+      mode: recipe.mode ?? 'ask',
+      model: recipe.model ?? settings.defaultModel ?? null,
+      reasoning: 'none',
+      shortcut: true,
+      ...(recipe.kind === 'recipe' ? { recipeName: recipe.name } : {}),
+    });
   }
 
   async #notice(conversationId: string, text: string, tone: 'info' | 'warn' | 'error'): Promise<void> {

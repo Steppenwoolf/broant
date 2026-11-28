@@ -457,12 +457,13 @@ const norm = (s: string) =>
  */
 function dedupeText(nodes: ONode[], ancestorNames: string[]): ONode[] {
   const siblingNames = new Set(nodes.filter(n => n.kind === 'element' && n.name).map(n => norm(n.name)));
+  const siblingList = [...siblingNames];
   const out: ONode[] = [];
   for (const n of nodes) {
     if (n.kind === 'text') {
       const t = norm(n.name);
       // A label's text next to the control it names is dropped, also when it is only part of the name.
-      const partOfSibling = t.length >= 3 && [...siblingNames].some(name => name.includes(t));
+      const partOfSibling = t.length >= 3 && siblingList.some(name => name.includes(t));
       // Separators and punctuation alone ("|", "·", "›") carry nothing for an agent.
       if (!/[\p{L}\p{N}]/u.test(t)) continue;
       if (!t || siblingNames.has(t) || partOfSibling || ancestorNames.some(a => a.includes(t))) continue;

@@ -317,7 +317,7 @@ export function App() {
    */
   const sendMessage = (
     text: string,
-    extra: { mode?: PermissionMode; model?: ModelRef; startUrl?: string; shortcut?: true } = {},
+    extra: { mode?: PermissionMode; model?: ModelRef; startUrl?: string; shortcut?: true; recipeName?: string } = {},
   ): void => {
     if (!client) return;
     // `/compact` compacts the conversation now, or at the next turn boundary of a run.
@@ -358,6 +358,7 @@ export function App() {
       reasoning,
       ...(extra.startUrl ? { startUrl: extra.startUrl } : {}),
       ...(extra.shortcut ? { shortcut: true as const } : {}),
+      ...(extra.recipeName ? { recipeName: extra.recipeName } : {}),
     });
     setPendingTabs([]);
     setQuotes([]);
@@ -367,7 +368,8 @@ export function App() {
   const runShortcut = (s: SavedShortcut) => {
     if (!model) return;
     if (!active && s.mode === 'auto' && mode !== 'auto' && !settings.autoNoticeShown) setAutoNotice(true);
-    sendMessage(s.text, active ? {} : { mode: s.mode, model: s.model, startUrl: s.startUrl, shortcut: true });
+    const recipeName = s.kind === 'recipe' ? s.name : undefined;
+    sendMessage(s.text, active ? {} : { mode: s.mode, model: s.model, startUrl: s.startUrl, shortcut: true, recipeName });
   };
 
   const onLaunch = (item: LauncherItem) => {
@@ -615,7 +617,10 @@ export function App() {
         onPreferLoaded={checked => void settingsStorage.set(s => ({ ...s, preferLoadedModel: checked }))}
         onRefreshLoadedModel={refreshLoadedModel}
         activeLoadedModelName={activeLoadedModelName}
-        localProviderKind={providers.find(p => p.kind === 'lmstudio' || p.kind === 'ollama')?.kind ?? null}
+        localProviderKind={
+          (providers.find(p => p.kind === 'lmstudio' || p.kind === 'ollama')?.kind as 'lmstudio' | 'ollama' | undefined) ??
+          null
+        }
       />
     </div>
   );

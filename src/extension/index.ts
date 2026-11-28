@@ -14,15 +14,32 @@ import { settingsStorage } from '@src/store/settings';
 import { initAgentBridge, bridgeDispatcher, bridgeClient } from '@src/bridge';
 import { initRailHub } from './rail-hub';
 import { broantLifecycle } from './lifecycle';
+import { PageMonitorService } from './page-monitor';
+import { notifyMonitor } from './notify';
+import { upsertMonitor } from '@src/store/monitors';
+import { ensureBuiltinRecipes } from '@src/store/shortcuts';
 
 export const runManager = new RunManager();
 listenForPanels(runManager);
 listenForSelections(runManager);
 initAgentBridge(runManager);
 
+const pageMonitor = new PageMonitorService({
+  onNotify: (m, summary) => notifyMonitor(m.title, summary),
+  onMcpAlert: payload => bridgeClient?.send(payload as never),
+});
+pageMonitor.init();
+void ensureBuiltinRecipes().catch(error => console.error('[shortcuts] builtin recipe seed failed', error));
+
 const railHub = initRailHub({
   getDispatcher: () => bridgeDispatcher,
   stopAllLocalRuns: () => runManager.stopAllLocalRuns(),
+  runRecipe: (tabId, recipeName, selectionText) => runManager.runQuickRecipe(tabId, recipeName, selectionText),
+  addMonitorForTab: async tab => {
+    if (!tab?.url) return { ok: false, error: 'No active tab URL' };
+    const res = await upsertMonitor({ url: tab.url, title: tab.title });
+    return res.ok ? { ok: true } : { ok: false, error: res.error };
+  },
 });
 
 broantLifecycle.init({

@@ -92,12 +92,17 @@ async function main() {
   }
 
   const token = resolveAuthToken(parsed.token);
+  const allowedExtensionIds = (process.env.BROANT_EXTENSION_ID || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
 
   const config: BridgeConfig = {
     host: parsed.host,
     port: parsed.port,
     authToken: token,
     connectGraceMs: parsed.graceMs,
+    allowedExtensionIds: allowedExtensionIds.length > 0 ? allowedExtensionIds : undefined,
   };
 
   logStderr('INFO', `Initializing broant-mcp on ${config.host}:${config.port}...`);

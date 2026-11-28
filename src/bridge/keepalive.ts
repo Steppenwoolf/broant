@@ -5,6 +5,7 @@ export class KeepAliveManager {
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private onPingCallback: (() => void) | null = null;
   private onCheckCallback: (() => void) | null = null;
+  private alarmListenerBound = false;
 
   constructor(onPing: () => void, onCheck: () => void) {
     this.onPingCallback = onPing;
@@ -19,11 +20,14 @@ export class KeepAliveManager {
           chrome.alarms.create(ALARM_NAME, { periodInMinutes: 0.5 });
         }
       });
-      chrome.alarms.onAlarm.addListener(alarm => {
-        if (alarm.name === ALARM_NAME) {
-          this.onCheckCallback?.();
-        }
-      });
+      if (!this.alarmListenerBound) {
+        this.alarmListenerBound = true;
+        chrome.alarms.onAlarm.addListener(alarm => {
+          if (alarm.name === ALARM_NAME) {
+            this.onCheckCallback?.();
+          }
+        });
+      }
     }
   }
 

@@ -47,17 +47,47 @@ export function ShortcutEditor({
   const [draft, setDraft] = useState<ShortcutDraft>(initial);
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<ShortcutDraft>) => setDraft(d => ({ ...d, ...patch }));
+  const isRecipe = draft.kind === 'recipe';
+  const extractSource =
+    draft.steps?.[0]?.type === 'extract' ? draft.steps[0].source : 'read';
+
+  const setRecipeSource = (source: 'read' | 'selection' | 'snapshot', promptText: string) => {
+    set({
+      kind: 'recipe',
+      zeroTool: true,
+      steps: [
+        { type: 'extract', source, maxChars: source === 'selection' ? 8_000 : 16_000, saveAs: 'ctx' },
+        { type: 'llm', tools: 'none', prompt: `${promptText.trim()}\n\n{{ctx}}`, saveAs: 'result' },
+      ],
+    });
+  };
+
   return (
     <form
       className="flex flex-col gap-3"
       onSubmit={e => {
         e.preventDefault();
         void (async () => {
+          const baseText = draft.text.trim();
           const shortcut: ShortcutDraft = {
             ...draft,
             name: draft.name.trim(),
             description: draft.description.trim(),
             startUrl: draft.startUrl?.trim() || undefined,
+            ...(draft.kind === 'recipe'
+              ? {
+                  zeroTool: true,
+                  steps: [
+                    {
+                      type: 'extract',
+                      source: extractSource,
+                      maxChars: extractSource === 'selection' ? 8_000 : 16_000,
+                      saveAs: 'ctx',
+                    },
+                    { type: 'llm', tools: 'none', prompt: `${baseText}\n\n{{ctx}}`, saveAs: 'result' },
+                  ],
+                }
+              : { kind: 'prompt', zeroTool: undefined, steps: undefined }),
           };
           const others = (await listShortcuts()).filter(s => s.id !== draft.id);
           const problem = checkShortcut(shortcut, others);
@@ -107,6 +137,35 @@ export function ShortcutEditor({
           onChange={e => set({ startUrl: e.target.value })}
         />
       </Field>
+      <div className="flex flex-wrap gap-3">
+        <Field label="Execution Type">
+          <Select
+            aria-label="Execution Type"
+            value={isRecipe ? 'recipe' : 'prompt'}
+            onChange={e => {
+              if (e.target.value === 'recipe') {
+                setRecipeSource(extractSource, draft.text);
+              } else {
+                set({ kind: 'prompt', zeroTool: false, steps: undefined });
+              }
+            }}>
+            <option value="prompt">Standard Agent Prompt</option>
+            <option value="recipe">Fast Recipe (0-tool)</option>
+          </Select>
+        </Field>
+        {isRecipe ? (
+          <Field label="Input Source">
+            <Select
+              aria-label="Input Source"
+              value={extractSource}
+              onChange={e => setRecipeSource(e.target.value as 'read' | 'selection' | 'snapshot', draft.text)}>
+              <option value="read">Page Text (read)</option>
+              <option value="selection">Selected Text</option>
+              <option value="snapshot">DOM Snapshot</option>
+            </Select>
+          </Field>
+        ) : null}
+      </div>
       <div className="flex flex-wrap gap-3">
         <Field label={t('shortcut.mode')}>
           <Select

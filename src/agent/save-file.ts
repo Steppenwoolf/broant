@@ -34,15 +34,30 @@ export const SAVE_FILE_TOOL: AgentTool = {
 
 export type SaveCheck = { ok: true; filename: string; mimeType: string; bytes: number } | { ok: false; reason: string };
 
+const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
+
+/** Returns true for file types that can execute scripts locally (e.g. HTML) and always require user confirmation. */
+export function requiresSaveConfirmation(filename: string, mimeType: string): boolean {
+  return mimeType === 'text/html' || /\.html?$/i.test(filename);
+}
+
 /** Checks a `save_file` call before anything is saved. */
 export function checkSave(args: Record<string, unknown>): SaveCheck {
-  const raw = typeof args.filename === 'string' ? args.filename.trim() : '';
+  const rawInput = typeof args.filename === 'string' ? args.filename : '';
+  const raw = rawInput.trim();
   const content = typeof args.content === 'string' ? args.content : null;
   const mimeType = typeof args.mimeType === 'string' ? args.mimeType : '';
   if (content === null) return { ok: false, reason: 'content must be text.' };
-  // A plain name: no folders, no hidden file, no characters a file system refuses.
+  // A plain name: no folders, no hidden file, no trailing dot/space, no Windows reserved names.
   // eslint-disable-next-line no-control-regex
-  if (!raw || /[/\\:*?"<>|\u0000-\u001f]/.test(raw) || raw.startsWith('.') || raw.length > 120) {
+  if (
+    !raw ||
+    /[/\\:*?"<>|\u0000-\u001f]/.test(raw) ||
+    raw.startsWith('.') ||
+    /[.\s]$/.test(rawInput) ||
+    WINDOWS_RESERVED_NAME.test(raw) ||
+    raw.length > 120
+  ) {
     return { ok: false, reason: 'filename must be a plain file name, such as report.csv, without folders.' };
   }
   const extension = /\.([a-z0-9]+)$/i.exec(raw)?.[1]?.toLowerCase() ?? '';

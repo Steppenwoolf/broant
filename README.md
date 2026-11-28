@@ -12,7 +12,7 @@
 > *Local-First Headful AI Browser Runtime for Claude Code, Cursor, Antigravity, and Local LLMs.*
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-[![Tests: 955 Passed](https://img.shields.io/badge/Vitest-955%20passed-brightgreen.svg)]()
+[![Tests: 968 Passed](https://img.shields.io/badge/Vitest-968%20passed-brightgreen.svg)]()
 [![MCP: Native](https://img.shields.io/badge/MCP-Native%20Stdio%20%2B%20Hub-orange.svg)]()
 [![Platform: Chrome MV3](https://img.shields.io/badge/Platform-Chrome%20MV3-yellow.svg)]()
 
@@ -29,13 +29,14 @@ Unlike headless tools (Playwright/Puppeteer) that launch empty profiles and trig
 ## ⚡ Core Capabilities
 
 ### 1. Native MCP Server (`broant-mcp`)
-- **9 Core Browser Tools**:
+- **10 Core Browser Tools**:
   - `browser_navigate`: Navigate active or new tabs cleanly.
-  - `browser_click`: Click, hover, or focus interactive elements using element refs (`ref: "e12"`).
+  - `browser_click`: Click, double-click, hover, press Enter, or focus interactive elements using element refs (`ref: "e12"`).
   - `browser_fill`: Single or multi-field form completion (`fields: { e1: "user", e2: "pass" }`).
   - `browser_observe`: Accessibility-tree DOM snapshot with interactive refs.
-  - `browser_read`: Extract text content or articles with pagination offsets.
-  - `browser_screenshot`: Multimodal vision returning native MCP image content (`ref` crop, `full_page`, bounding box `labels`).
+  - `browser_read`: Extract text content or articles with pagination offsets (`tab_id` supported).
+  - `browser_screenshot`: Multimodal vision returning native MCP image content (`ref` crop, `full_page`, bounding box `labels`, `tab_id` supported).
+  - `browser_upload`: Attach local files to `<input type="file">` elements (opt-in via Settings → Agent Bridge → **Allow File Uploads**).
   - `browser_list_tabs`: Query open tabs and active debugging sessions.
   - `browser_close_session`: Detach CDP debugger cleanly.
   - `browser_run_agent_task`: Delegate complex, multi-step autonomous browsing tasks.
@@ -50,13 +51,15 @@ Unlike headless tools (Playwright/Puppeteer) that launch empty profiles and trig
 - Operates inside your existing Chrome window with all your active logins (Google, GitHub, trading portals, internal VPN intranets).
 - Bypasses Cloudflare Turnstile and bot-checks naturally without fake fingerprints.
 
-### 4. Smart DOM Pruning for Local LLMs (1.7B – 8B)
-- Prunes noise attributes, repetitive lists, and SVG bloat to compress page representation under 14,000 characters.
-- Enables accurate web automation even on smaller, privacy-focused models (LM Studio, Ollama, Qwen, Gemma).
+### 4. Local LLM Optimization & Zero-Tool Recipes
+- **Smart DOM Pruning**: Prunes noise attributes, repetitive lists, and SVG bloat to compress page representation under 14,000 characters.
+- **Compact Tool Mode & KV-Cache Preservation**: Automatically trims rarely used tools (`LOCAL_COMPACT_OFF`) and delays context elision (`0.85 × threshold`) for local servers (LM Studio, Ollama) to preserve prompt prefix caching.
+- **Zero-Tool Recipes**: Deterministic 1-click pipelines (`extract → llm → act/notify`) without tool-schema overhead, including built-in `/summarize-fast`, `/extract-table`, and `/draft-reply` actions.
 
-### 5. Co-Pilot HUD & Visual Safety
-- Automatically injects visual border indicators on tabs under active MCP control.
-- Hardened permissions: dangerous local disk file operations (`files`) are stripped from remote tool RPC sessions.
+### 5. Floating Mini-Rail HUD, Page Monitors & Safety
+- **Floating Mini-Rail HUD**: Shadow-DOM overlay on web pages with 1-click Quick Actions, `+ Watch this page`, DOM pruning toggle (`14k` / `standard`), and live MCP/Agent status LEDs.
+- **Background Page Monitors**: Scheduled `chrome.alarms` watchers using line-diff detection (`diffLines`) that skip LLM calls when page content has not changed.
+- **Visual Safety & Hardened Permissions**: Border indicators on tabs under active MCP control, nonce-bounded untrusted content isolation, opt-in file uploads (`bridgeAllowFileUploads: false` by default), and a persistent 200-entry Diagnostic Log viewer in Settings → Data (with analytics disabled by default).
 
 ---
 
@@ -126,8 +129,8 @@ broant/
 │       ├── src/
 │       │   ├── bridge-hub.ts # Auto-Electing Leader/Relay WebSocket Hub
 │       │   ├── cli.ts        # CLI entrypoint & stdio transport
-│       │   ├── protocol.ts   # Protocol definitions & auth timing guards
-│       │   └── server.ts     # 9 MCP tools & browser://tabs resource
+│       │   ├── protocol.ts   # Protocol definitions, token auto-gen & auth guards
+│       │   └── server.ts     # 10 MCP tools & browser://tabs resource
 │       └── package.json
 ├── src/
 │   ├── bridge/               # Extension-side Bridge client & dispatcher
@@ -144,7 +147,7 @@ broant/
 ## 🧪 Testing & Verification
 
 ```bash
-# Run unit & integration tests (955 vitest tests)
+# Run unit & integration tests (968 vitest tests)
 npx vitest run
 
 # Typecheck and build standalone MCP server

@@ -42,6 +42,8 @@ export type PanelCommand =
       startUrl?: string;
       /** The message is a saved shortcut's, for the usage counts. */
       shortcut?: true;
+      /** Optional deterministic recipe name to run via 0-tool recipe runner. */
+      recipeName?: string;
     }
   | {
       type: 'queue';

@@ -166,6 +166,7 @@ export class AgentLoop {
   #usage: Usage = ZERO_USAGE;
   #turns = 0;
   #toolNames: Set<string>;
+  #toolsChars: number;
   /** The address the model last saw for each tab, for the header's "changed" line. */
   #seen = new Map<number, string>();
   /** The input tokens the provider last reported, and the request's characters then. */
@@ -203,6 +204,7 @@ export class AgentLoop {
     this.guards = new Guards(options.restore?.guards);
     if (options.restore) this.#debt = options.restore.debt.map(d => ({ ...d }));
     this.#toolNames = new Set(options.tools.map(t => t.name));
+    this.#toolsChars = JSON.stringify(options.tools.map(t => [t.name, t.description, t.parameters])).length;
   }
 
   get turns(): number {
@@ -224,7 +226,9 @@ export class AgentLoop {
     const threshold = this.#turns < this.#cooldownUntil ? limit : contextThreshold(profile, window);
     let tokens = this.estimate(request);
     let rebuilt: Request | undefined;
-    if (tokens > threshold / 2) {
+    const isLocal = this.options.model.chat?.spec?.kind === 'lmstudio' || this.options.model.chat?.spec?.kind === 'ollama';
+    const elisionTrigger = isLocal ? threshold * 0.85 : threshold / 2;
+    if (tokens > elisionTrigger) {
       const plan = planElision(await activeBranch(this.options.conversationId));
       const saved = plan.reduce((n, e) => n + e.saved, 0) / 4;
       if (plan.length && (tokens > threshold || saved >= elisionChunk(window))) {
@@ -264,8 +268,7 @@ export class AgentLoop {
   }
 
   #fixedChars(): number {
-    const { system, tools } = this.options;
-    return system.length + JSON.stringify(tools.map(t => [t.name, t.description, t.parameters])).length;
+    return this.options.system.length + this.#toolsChars;
   }
 
   /** Step 3: shorten the recent part. True when it changed something. */
@@ -328,12 +331,12 @@ export class AgentLoop {
 
   /** Step 2: compaction. True when it ran; starts the cooldown and tells the panel. */
   async compact(): Promise<boolean> {
-    const { model, system, tools } = this.options;
+    const { model } = this.options;
     const result = await runCompaction({
       conversationId: this.options.conversationId,
       model,
       window: this.window,
-      fixedChars: system.length + JSON.stringify(tools.map(t => [t.name, t.description, t.parameters])).length,
+      fixedChars: this.#fixedChars(),
       unverified: this.#unverified(),
       signal: this.options.signal,
       messages: branch => toModelMessages(branch, { vision: model.profile.vision, unverified: this.#unverified() }),
@@ -366,9 +369,7 @@ export class AgentLoop {
       toModelMessages(branch, { vision: this.options.model.profile.vision, unverified: this.#unverified() }),
     );
     const tools = this.options.tools;
-    const chars =
-      contextChars(messages, this.options.system) +
-      JSON.stringify(tools.map(t => [t.name, t.description, t.parameters])).length;
+    const chars = contextChars(messages, this.options.system) + this.#toolsChars;
     return { messages, tools, chars };
   }
 

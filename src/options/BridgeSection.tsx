@@ -73,6 +73,16 @@ export function BridgeSection() {
         </SettingsRow>
 
         <SettingsRow
+          label={t('bridge.allowFileUploads')}
+          description={t('bridge.allowFileUploadsHint')}>
+          <Switch
+            aria-label={t('bridge.allowFileUploads')}
+            checked={settings.bridgeAllowFileUploads}
+            onChange={on => void settingsStorage.set(s => ({ ...s, bridgeAllowFileUploads: on }))}
+          />
+        </SettingsRow>
+
+        <SettingsRow
           label={t('bridge.status')}
           description={
             <span className="flex items-center gap-2">

@@ -22,7 +22,8 @@
     "autorun": "node fixtures/autorun.mjs",
     "install-chrome": "node fixtures/chrome.mjs install",
     "clean-chrome": "node fixtures/chrome.mjs clean",
-    "clean": "rimraf dist dist-zip .wxt .output"
+    "clean": "rimraf dist dist-zip .wxt .output",
+    "pack:context": "npx --yes repomix --include \"packages/mcp/src/**,src/bridge/**,src/llm/**,src/agent/loop.ts,src/agent/prompt.ts,src/agent/context.ts,src/agent/compaction.ts,src/agent/guards.ts,src/extension/run-manager.ts,src/extension/analytics.ts,src/extension/rail-hub.ts,entrypoints/background.ts,entrypoints/broant-rail.content.ts,src/browser-control/probe/source.ts,src/browser-control/core/perception/capture.ts,src/browser-control/core/perception/outline.ts,package.json\" --ignore \"**/__tests__/**\" -o for_neon/broant-core-part2.xml"
   },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "5.0.123",

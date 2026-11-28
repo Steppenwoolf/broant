@@ -23,6 +23,7 @@ export interface BridgeConfig {
   port: number;
   authToken: string;
   connectGraceMs: number;
+  allowedExtensionIds?: string[];
 }
 
 export interface BridgeToolResult {
@@ -108,9 +109,7 @@ export function safeTokenEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
-const DEFAULT_DEV_TOKEN = 'broant-secret-key';
-
-/** Resolve token: CLI --token > env BROANT_BRIDGE_TOKEN (or NANOBROWSER_BRIDGE_TOKEN) > ~/.broant/bridge.token > fallback */
+/** Resolve token: CLI --token > env BROANT_BRIDGE_TOKEN (or NANOBROWSER_BRIDGE_TOKEN) > ~/.broant/bridge.token > auto-generate */
 export function resolveAuthToken(cliToken?: string): string {
   if (cliToken?.trim()) return cliToken.trim();
   const envToken = process.env.BROANT_BRIDGE_TOKEN?.trim() || process.env.NANOBROWSER_BRIDGE_TOKEN?.trim();
@@ -128,7 +127,18 @@ export function resolveAuthToken(cliToken?: string): string {
       // Ignore read error
     }
   }
-  return DEFAULT_DEV_TOKEN;
+
+  const generated = crypto.randomBytes(32).toString('hex');
+  const targetDir = path.join(os.homedir(), '.broant');
+  const targetFile = path.join(targetDir, 'bridge.token');
+  try {
+    fs.mkdirSync(targetDir, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(targetFile, `${generated}\n`, { encoding: 'utf8', mode: 0o600 });
+    logStderr('INFO', `Generated new Bridge auth token at ${targetFile}`);
+  } catch (err) {
+    logStderr('WARN', `Could not persist generated Bridge auth token to ${targetFile}: ${String(err)}`);
+  }
+  return generated;
 }
 
 /** Logging strictly to stderr (stdout is reserved for JSON-RPC MCP frames) */

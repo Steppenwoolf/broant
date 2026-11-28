@@ -205,7 +205,7 @@ describe('BridgeDispatcher Direct Tool RPC', () => {
       type: 'call_tool',
       auth_token: 'secret',
       request_id: 'req-err-1',
-      tool: 'click',
+      tool: 'click' as never,
       args: { ref: 'e99' },
     });
 
@@ -295,5 +295,69 @@ describe('BridgeDispatcher Direct Tool RPC', () => {
     expect(disconnectCb).toBeDefined();
     disconnectCb?.();
     expect(closeSpy).toHaveBeenCalled();
+  });
+
+  it('rejects disallowed tools with TOOL_NOT_ALLOWED', async () => {
+    await dispatcher.dispatch({
+      type: 'call_tool',
+      auth_token: 'secret',
+      request_id: 'req-disallowed',
+      tool: 'eval' as never,
+      args: { code: 'alert(1)' },
+    });
+
+    expect(sent).toHaveLength(1);
+    const resp = sent[0];
+    expect(resp.type).toBe('tool_result');
+    if (resp.type === 'tool_result') {
+      expect(resp.ok).toBe(false);
+      expect(resp.error?.code).toBe('TOOL_NOT_ALLOWED');
+    }
+  });
+
+  it('normalizes double_click, press_enter, and fill_form fields', async () => {
+    const mockSession = {
+      id: 'sess-test-norm',
+      shareTab: vi.fn(),
+      call: vi.fn(async (tool, args) => ({ ok: true, data: { tool, args } })),
+    };
+    vi.spyOn(dispatcher.getToolSessions(), 'acquire').mockResolvedValue({
+      sessionId: 'sess-test-norm',
+      tabId: 109,
+      session: mockSession as never,
+      lastUsedAt: Date.now(),
+      busy: false,
+    });
+
+    await dispatcher.dispatch({
+      type: 'call_tool',
+      auth_token: 'secret',
+      request_id: 'req-dbl',
+      tool: 'act',
+      args: { ref: 'e5', action: 'double_click' },
+    });
+    expect(mockSession.call).toHaveBeenCalledWith('click', { target: { ref: 'e5' }, count: 2 }, expect.anything());
+
+    await dispatcher.dispatch({
+      type: 'call_tool',
+      auth_token: 'secret',
+      request_id: 'req-enter',
+      tool: 'act',
+      args: { ref: 'e6', action: 'press_enter' },
+    });
+    expect(mockSession.call).toHaveBeenCalledWith('press', { target: { ref: 'e6' }, keys: 'Enter' }, expect.anything());
+
+    await dispatcher.dispatch({
+      type: 'call_tool',
+      auth_token: 'secret',
+      request_id: 'req-form',
+      tool: 'fill',
+      args: { fields: [{ ref: 'e7', value: 'hi' }], submit: true },
+    });
+    expect(mockSession.call).toHaveBeenCalledWith(
+      'fill_form',
+      { fields: [{ target: { ref: 'e7' }, value: 'hi' }] },
+      expect.anything(),
+    );
   });
 });

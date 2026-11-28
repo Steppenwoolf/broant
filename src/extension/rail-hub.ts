@@ -1,12 +1,16 @@
 // src/extension/rail-hub.ts
 import { bridgeActivityStore } from '@src/store/bridge-activity';
 import { DEFAULT_SETTINGS, bridgeConnectedStorage, settingsStorage } from '@src/store/settings';
+import { BUILTIN_RECIPES, listShortcuts } from '@src/store/shortcuts';
+import { listMonitors } from '@src/store/monitors';
 import type { BridgeDispatcher } from '@src/bridge/dispatcher';
 import { broantLifecycle } from './lifecycle';
 
 export interface RailHubDeps {
   getDispatcher: () => BridgeDispatcher | null;
   stopAllLocalRuns: () => Promise<void> | void;
+  runRecipe?: (tabId: number, recipeName: string, selectionText?: string) => Promise<void>;
+  addMonitorForTab?: (tab?: chrome.tabs.Tab) => Promise<{ ok: boolean; error?: string }>;
 }
 
 async function isNormalBrowserTab(sender?: chrome.runtime.MessageSender): Promise<boolean> {
@@ -34,6 +38,16 @@ export function initRailHub(deps: RailHubDeps): { broadcast: () => Promise<void>
   async function buildBaseSnapshot() {
     const settings = await settingsStorage.get().catch(() => DEFAULT_SETTINGS);
     const connected = await bridgeConnectedStorage.get().catch(() => false);
+    const savedShortcuts = await listShortcuts().catch(() => []);
+    const monitors = await listMonitors().catch(() => []);
+    const seenNames = new Set<string>();
+    const quickRecipes: Array<{ name: string; description: string }> = [];
+    for (const s of [...savedShortcuts.filter(x => x.pinned || x.kind === 'recipe'), ...BUILTIN_RECIPES]) {
+      if (seenNames.has(s.name)) continue;
+      seenNames.add(s.name);
+      quickRecipes.push({ name: s.name, description: s.description });
+      if (quickRecipes.length >= 6) break;
+    }
     const theme = settings.theme === 'light' ? 'light' : 'dark';
     return {
       theme,
@@ -46,6 +60,8 @@ export function initRailHub(deps: RailHubDeps): { broadcast: () => Promise<void>
         : 'LM Studio: idle',
       topPx: (settings as { miniRailTopPx?: number }).miniRailTopPx ?? 14,
       activity: bridgeActivityStore.get(),
+      quickRecipes,
+      activeMonitorsCount: monitors.filter(m => m.enabled).length,
     };
   }
 
@@ -97,14 +113,25 @@ export function initRailHub(deps: RailHubDeps): { broadcast: () => Promise<void>
     });
   }
 
+  let broadcastTimer: ReturnType<typeof setTimeout> | null = null;
+  function scheduleBroadcast() {
+    if (ports.size === 0) return;
+    if (broadcastTimer) clearTimeout(broadcastTimer);
+    broadcastTimer = setTimeout(() => {
+      broadcastTimer = null;
+      void broadcast();
+    }, 50);
+  }
+
   bridgeActivityStore.subscribe(() => {
-    void broadcast();
+    scheduleBroadcast();
   });
 
   if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
-    chrome.storage.onChanged.addListener((_changes, area) => {
-      if (area === 'local' || area === 'session') {
-        void broadcast();
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local' && area !== 'session') return;
+      if ('nb.settings' in changes || 'nb.bridge_connected' in changes) {
+        scheduleBroadcast();
       }
     });
   }
@@ -116,6 +143,22 @@ export function initRailHub(deps: RailHubDeps): { broadcast: () => Promise<void>
 
       if (action === 'open_sidepanel' || action === 'open_routines') {
         broantLifecycle.expandFromRailSync(sender.tab);
+        sendResponse({ ok: true });
+        return false;
+      }
+
+      if (action === 'run_recipe' && typeof msg.recipeName === 'string' && typeof sender.tab?.id === 'number') {
+        broantLifecycle.expandFromRailSync(sender.tab);
+        const sel = typeof msg.selectionText === 'string' ? msg.selectionText : undefined;
+        void deps.runRecipe?.(sender.tab.id, msg.recipeName, sel);
+        sendResponse({ ok: true });
+        return false;
+      }
+
+      if (action === 'watch_page') {
+        void deps.addMonitorForTab?.(sender.tab).then(() => {
+          scheduleBroadcast();
+        });
         sendResponse({ ok: true });
         return false;
       }

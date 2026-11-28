@@ -42,6 +42,8 @@ export interface Settings {
   preferLoadedModel: boolean;
   /** Whether the Agent Bridge WebSocket client is enabled. */
   bridgeEnabled: boolean;
+  /** Allow connected local MCP agents to upload files via the browser `files` capability. */
+  bridgeAllowFileUploads: boolean;
   /** Agent Bridge WebSocket server URL. */
   bridgeServerUrl: string;
   /** Agent Bridge authentication token. */
@@ -70,11 +72,12 @@ export const DEFAULT_SETTINGS: Settings = {
   autoNoticeShown: false,
   agentTabsOnEnd: 'ask',
   onboarded: false,
-  analyticsPing: true,
-  analyticsStats: true,
+  analyticsPing: false,
+  analyticsStats: false,
   pageBorder: true,
   preferLoadedModel: true,
   bridgeEnabled: false,
+  bridgeAllowFileUploads: false,
   bridgeServerUrl: 'ws://127.0.0.1:8765',
   bridgeAuthToken: 'broant-secret-key',
   showMiniRail: true,

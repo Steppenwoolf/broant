@@ -36,6 +36,15 @@ export async function notifyFinished(conversationId: string, ok: boolean, tabId:
   );
 }
 
+export async function notifyMonitor(title: string, summary: string, tabId?: number): Promise<void> {
+  if (!globalThis.chrome?.notifications) return;
+  const id = `monitor-${Date.now()}`;
+  if (tabId !== undefined) tabOfNotification.set(id, tabId);
+  await chrome.notifications
+    .create(id, { type: 'basic', iconUrl: chrome.runtime.getURL('/icon-128.png'), title: `BroAnt Monitor: ${title}`, message: summary })
+    .catch(() => undefined);
+}
+
 async function show(id: string, message: string, tabId: number | undefined): Promise<void> {
   if (!globalThis.chrome?.notifications) return;
   if (tabId !== undefined) tabOfNotification.set(id, tabId);

@@ -6,6 +6,19 @@ import { db } from './db';
 import { newId } from './conversations';
 import type { ModelRef, PermissionMode, StoredShortcut } from './types';
 
+export type RecipeStep =
+  | { type: 'extract'; source: 'read' | 'snapshot' | 'selection'; maxChars?: number; saveAs: string }
+  | {
+      type: 'llm';
+      prompt: string;
+      system?: string;
+      tools?: 'none' | 'compact';
+      maxOutputTokens?: number;
+      saveAs: string;
+    }
+  | { type: 'act'; action: 'copy_result' | 'save_file' | 'fill_focused'; fromVar: string; filename?: string }
+  | { type: 'mcp_notify'; event: string; fromVar: string };
+
 export interface Shortcut {
   /** Lowercase letters, digits and hyphens, as Agent Skills names are; the launcher shows `/name`. */
   name: string;
@@ -15,6 +28,92 @@ export interface Shortcut {
   startUrl?: string;
   mode?: PermissionMode;
   model?: ModelRef;
+  kind?: 'prompt' | 'recipe';
+  zeroTool?: boolean;
+  steps?: RecipeStep[];
+}
+
+export const BUILTIN_RECIPES: Shortcut[] = [
+  {
+    name: 'summarize-fast',
+    description: 'Fast 0-tool summary of the current page',
+    text: 'Summarize the key points of this page concisely.',
+    kind: 'recipe',
+    zeroTool: true,
+    steps: [
+      { type: 'extract', source: 'read', maxChars: 16_000, saveAs: 'page' },
+      {
+        type: 'llm',
+        tools: 'none',
+        prompt: 'Summarize the key points and main facts from {{page.url}} ({{page.title}}):\n\n{{page}}',
+        saveAs: 'summary',
+      },
+    ],
+  },
+  {
+    name: 'extract-table',
+    description: 'Extract structured data from the page as Markdown',
+    text: 'Extract key structured data or tables from this page.',
+    kind: 'recipe',
+    zeroTool: true,
+    steps: [
+      { type: 'extract', source: 'read', maxChars: 20_000, saveAs: 'page' },
+      {
+        type: 'llm',
+        tools: 'none',
+        prompt: 'Extract structured entities, prices, or tables from {{page.url}} as clean Markdown:\n\n{{page}}',
+        saveAs: 'table',
+      },
+    ],
+  },
+  {
+    name: 'draft-reply',
+    description: 'Draft a concise reply to selected text or page content',
+    text: 'Draft a clear, concise reply based on the selected text.',
+    kind: 'recipe',
+    zeroTool: true,
+    steps: [
+      { type: 'extract', source: 'selection', maxChars: 8_000, saveAs: 'ctx' },
+      {
+        type: 'llm',
+        tools: 'none',
+        prompt: 'Draft a clear, polite, concise reply to the following context from {{page.url}}:\n\n{{ctx}}',
+        saveAs: 'draft',
+      },
+    ],
+  },
+];
+
+const VAR_NAME = /^[a-zA-Z0-9_]{1,32}$/;
+const MAX_RECIPE_STEPS = 10;
+
+export function isValidRecipeSteps(steps: unknown): steps is RecipeStep[] {
+  if (!Array.isArray(steps) || steps.length === 0 || steps.length > MAX_RECIPE_STEPS) return false;
+  return steps.every(step => {
+    if (!step || typeof step !== 'object') return false;
+    const s = step as Record<string, unknown>;
+    if (s.type === 'extract') {
+      return (
+        (s.source === 'read' || s.source === 'snapshot' || s.source === 'selection') &&
+        typeof s.saveAs === 'string' &&
+        VAR_NAME.test(s.saveAs)
+      );
+    }
+    if (s.type === 'llm') {
+      return typeof s.prompt === 'string' && s.prompt.trim().length > 0 && typeof s.saveAs === 'string' && VAR_NAME.test(s.saveAs);
+    }
+    if (s.type === 'act') {
+      return (
+        (s.action === 'copy_result' || s.action === 'save_file' || s.action === 'fill_focused') &&
+        typeof s.fromVar === 'string' &&
+        VAR_NAME.test(s.fromVar)
+      );
+    }
+    if (s.type === 'mcp_notify') {
+      return typeof s.event === 'string' && s.event.trim().length > 0 && typeof s.fromVar === 'string' && VAR_NAME.test(s.fromVar);
+    }
+    return false;
+  });
 }
 
 export const NAME_MAX = 64;
@@ -30,6 +129,7 @@ export function checkShortcut(
   if (s.name === 'new' || s.name === 'compact' || others.some(o => o.name === s.name)) return 'shortcut.error.taken';
   if (!s.text.trim()) return 'shortcut.error.text';
   if (s.startUrl && !isStartUrl(s.startUrl)) return 'shortcut.error.url';
+  if (s.kind === 'recipe' && s.steps && !isValidRecipeSteps(s.steps)) return 'shortcut.error.text';
   return null;
 }
 
@@ -63,6 +163,9 @@ export function toSkillMd(s: Shortcut): string {
   if (s.startUrl) meta.push(`    start-url: ${scalar(s.startUrl)}`);
   if (s.mode) meta.push(`    mode: ${s.mode}`);
   if (s.model) meta.push(`    provider: ${scalar(s.model.providerId)}`, `    model: ${scalar(s.model.model)}`);
+  if (s.kind) meta.push(`    kind: ${s.kind}`);
+  if (s.zeroTool) meta.push(`    zero-tool: true`);
+  if (s.steps?.length) meta.push(`    steps-json: ${scalar(JSON.stringify(s.steps))}`);
   if (meta.length) lines.push('metadata:', '  nanobrowser:', ...meta);
   lines.push('---', s.text.replace(/\s+$/, ''), '');
   return lines.join('\n');
@@ -120,6 +223,18 @@ export function parseSkillMd(text: string): Shortcut | null {
   const provider = str(nb.provider);
   const model = str(nb.model);
   const startUrl = str(nb['start-url']);
+  const kind = str(nb.kind);
+  const zeroTool = str(nb['zero-tool']) === 'true';
+  let steps: RecipeStep[] | undefined;
+  const stepsRaw = str(nb['steps-json']);
+  if (stepsRaw) {
+    try {
+      const parsedSteps = JSON.parse(stepsRaw);
+      if (isValidRecipeSteps(parsedSteps)) steps = parsedSteps;
+    } catch {
+      // ignore invalid recipe steps JSON
+    }
+  }
   return {
     name,
     description: str(yaml.description) ?? '',
@@ -127,6 +242,9 @@ export function parseSkillMd(text: string): Shortcut | null {
     ...(startUrl && isStartUrl(startUrl) ? { startUrl } : {}),
     ...(mode === 'ask' || mode === 'auto' ? { mode } : {}),
     ...(provider && model ? { model: { providerId: provider, model } } : {}),
+    ...(kind === 'prompt' || kind === 'recipe' ? { kind } : {}),
+    ...(zeroTool ? { zeroTool: true } : {}),
+    ...(steps ? { steps } : {}),
   };
 }
 
@@ -177,6 +295,26 @@ export async function deleteShortcut(id: string): Promise<void> {
 export async function clearShortcuts(): Promise<void> {
   await (await db()).clear('shortcuts');
   notify();
+}
+
+const BUILTIN_SEEDED_KEY = 'nb.builtinRecipesSeeded';
+
+/** Seeds built-in HARPA-style recipes into the shortcuts store once so they appear in Side Panel, Settings, and Mini-Rail. */
+export async function ensureBuiltinRecipes(): Promise<void> {
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    const flag = await chrome.storage.local.get(BUILTIN_SEEDED_KEY).catch(() => ({}));
+    if ((flag as Record<string, unknown>)[BUILTIN_SEEDED_KEY]) return;
+  }
+  const existing = await listShortcuts().catch(() => []);
+  const existingNames = new Set(existing.map(s => s.name));
+  for (const r of BUILTIN_RECIPES) {
+    if (!existingNames.has(r.name)) {
+      await saveShortcut({ ...r, pinned: true });
+    }
+  }
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    await chrome.storage.local.set({ [BUILTIN_SEEDED_KEY]: true }).catch(() => undefined);
+  }
 }
 
 // The panel and the settings page are separate documents: a change in one reaches the other through a broadcast.

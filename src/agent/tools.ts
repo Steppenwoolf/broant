@@ -114,6 +114,9 @@ export function allTools(agentTools: AgentTool[] = []): AgentTool[] {
   return [...layer, DONE_TOOL, READ_ATTACHMENT_TOOL, SAVE_FILE_TOOL, ...agentTools];
 }
 
+/** Rare tools omitted in `compact` mode to cut prompt token overhead for local LLM servers (LM Studio / Ollama). */
+export const LOCAL_COMPACT_OFF = ['wait', 'handle_dialog', 'hover', 'tabs', 'upload'] as const;
+
 /**
  * The tools a run gets: every tool the model can use. The run keeps this list from start to end, so its prompt prefix
  * stays cached; it is checked again at dispatch. `disabled` is for the unit tests and scenario sets, which test that
@@ -122,10 +125,14 @@ export function allTools(agentTools: AgentTool[] = []): AgentTool[] {
 export function toolsForRun(options: {
   disabled?: readonly string[];
   vision: boolean;
+  compact?: boolean;
   agentTools?: AgentTool[];
 }): AgentTool[] {
+  const off = options.compact
+    ? new Set([...(options.disabled ?? []), ...LOCAL_COMPACT_OFF])
+    : new Set(options.disabled ?? []);
   return allTools(options.agentTools).filter(
-    t => (t.required || !options.disabled?.includes(t.name)) && (t.name !== 'screenshot' || options.vision),
+    t => (t.required || !off.has(t.name)) && (t.name !== 'screenshot' || options.vision),
   );
 }
 

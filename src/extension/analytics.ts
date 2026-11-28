@@ -143,6 +143,7 @@ type Counts = Record<string, Record<string, number>>;
 /** Adds to today's counts, or sets a value as of today with `set`. Nothing is counted while usage counts are off. */
 export async function count(key: string, n = 1, mode: 'add' | 'set' = 'add', now = new Date()): Promise<void> {
   if (!COUNT_KEYS.has(key)) return;
+  if (!(await settings()).analyticsStats) return;
   await serial(async () => {
     // Checked in turn with the other writes, so a count cannot land after turning the switch off cleared the counts.
     if (!(await settings()).analyticsStats) return;

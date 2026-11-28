@@ -11,14 +11,15 @@ Connects AI coding assistants and LLMs (**Claude Code, Cursor, Antigravity, Clin
 - **Real Authenticated Browser**: Works inside your primary browser profile (Google, GitHub, trading platforms, internal dashboards) with **zero headless bot detections**, **no Cloudflare blocks**, and **no blank Playwright windows**.
 - **Auto-Electing Hub (`127.0.0.1:8765`)**: The first MCP client auto-elects as the WebSocket Leader Hub; any additional IDEs or terminals seamlessly connect in Relay mode without `EADDRINUSE` port conflicts. If the Leader exits, a Relay automatically re-elects as the new Leader.
 - **Strict Stdio Hygiene**: Pure JSON-RPC protocol frames on `stdout`. All logs, diagnostics, and progress updates are strictly routed to `stderr` to prevent JSON-RPC parsing corruption.
-- **9 Native MCP Tools**: Sub-second execution of direct actions (`browser_navigate`, `browser_click`, `browser_fill`, `browser_observe`, `browser_read`, `browser_list_tabs`, `browser_screenshot`, `browser_close_session`, `browser_run_agent_task`).
+- **10 Native MCP Tools**: Sub-second execution of direct actions (`browser_navigate`, `browser_click`, `browser_fill`, `browser_observe`, `browser_read`, `browser_screenshot`, `browser_upload`, `browser_list_tabs`, `browser_close_session`, `browser_run_agent_task`).
 - **Native Multimodal Vision**: `browser_screenshot` returns native MCP image content (`type: "image"`, base64 PNG/JPEG) with support for element crop (`ref`), full-page capture, and bounding box labels.
 - **Instant Tab Resource (`browser://tabs`)**: Fast inspection of open tabs and active sessions without consuming tool-call turns.
 - **Security Guardrails**:
   - Strict Cross-Site WebSocket Hijacking (CSWSH) origin validation.
   - Constant-time token verification (`crypto.timingSafeEqual`).
   - Gated message dispatching (commands dropped until explicit authentication handshake).
-  - Prompt injection isolation wrapping (`<untrusted_browser_content>`).
+  - Prompt injection isolation wrapping with per-call random nonces (`<<<untrusted-browser-content <hex> ...>>>`).
+  - Optional extension ID origin pinning (`BROANT_EXTENSION_ID`).
 
 ---
 
@@ -95,6 +96,7 @@ Options:
 Environment Variables:
   BROANT_BRIDGE_TOKEN      Bridge authentication token
   BROANT_BRIDGE_PORT       Bridge port override
+  BROANT_EXTENSION_ID      Comma-separated allowed Chrome extension IDs
   NANOBROWSER_BRIDGE_TOKEN Backward compatibility fallback token
 ```
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkSave } from '../save-file';
+import { checkSave, requiresSaveConfirmation } from '../save-file';
 
 describe('save_file checks', () => {
   it('takes a plain name whose extension matches its type', () => {
@@ -20,8 +20,14 @@ describe('save_file checks', () => {
       ok: false,
       reason: 'a .json file has the type application/json, not text/html.',
     });
-    for (const filename of ['../evil.txt', 'a/b.txt', 'C:\\x.txt', '.bashrc', '']) {
+    for (const filename of ['../evil.txt', 'a/b.txt', 'C:\\x.txt', '.bashrc', '', 'CON.txt', 'nul.csv', 'report.txt.', 'note.txt ']) {
       expect(checkSave({ filename, content: 'x', mimeType: 'text/plain' }).ok).toBe(false);
     }
+  });
+
+  it('requires confirmation for html files even in Auto mode', () => {
+    expect(requiresSaveConfirmation('page.html', 'text/html')).toBe(true);
+    expect(requiresSaveConfirmation('page.htm', 'text/plain')).toBe(true);
+    expect(requiresSaveConfirmation('report.csv', 'text/csv')).toBe(false);
   });
 });
